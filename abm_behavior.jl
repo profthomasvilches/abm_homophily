@@ -17,15 +17,16 @@ using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFra
 #Todo implement contact to recovered (from symptomatic) people that were vaccinated.
 #! ok
 #todo implement vaccination
-
+#! ok
 #todo implement transmission reduction and symptoms based on vaccination
 #! ok
+#todo implement matrix for behavior
 
 Base.@kwdef mutable struct Human
     idx::Int64 = 0 
     health::HEALTH = SUS
     health_status::HEALTH = SUS
-    vac_behavior::HEALTH = UNDEF
+    vac_behavior::VACS = UNDEFV
     swap::HEALTH = UNDEF
     swap_status::HEALTH = UNDEF
     sickfrom::HEALTH = UNDEF
@@ -54,14 +55,13 @@ Base.@kwdef mutable struct Human
 
     ag_new::Int16 = -1
     
-    vaccine_eff = 0.0
    
     recovered::Bool = false 
     daysisolation::Int64 = 999 
     daysinf::Int64 = 999 
     isofalse::Bool = false
     
-    betas_vac::Vector{Int64} = [0.0; 0.0; 0.0; 0.0; 0.0] # bs, bh, bl, ba, be
+    betas_vac::Vector{Float64} = [0.0; 0.0; 0.0; 0.0; 0.0] # bs, bh, bl, ba, be
    
     totaldaysiso::Int32 = 0  
 end
@@ -72,7 +72,7 @@ end
     h::Float64 = 0.5     
     seasonal::Bool = false ## seasonal betas or not
     popsize::Int64 = 100000
-    prov::Symbol = :ontario
+    prov::Symbol = :usa
     calibration::Bool = false
     start_several_inf::Bool = true
     modeltime::Int64 = 435
@@ -82,8 +82,9 @@ end
 
     fsevere::Float64 = 1.0 #
     frelasymp::Float64 = 0.26 ## relative transmission of asymptomatic
-    #vaccine_ef::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
-    
+    vaccine_eff::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
+    vaccine_eff_symp::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
+    vaccination_rate::Int64 = 10
     # herd::Int8 = 0 #typemax(Int32) ~ millions
     # Taiye: We are not considering herd immunity at this stage.
 
@@ -98,7 +99,6 @@ end
 
 Base.show(io::IO, ::MIME"text/plain", z::Human) = dump(z)
 
-include("matrices_code.jl")
 include("matrices.jl")
 ## constants 
 const humans = Array{Human}(undef, 0) 
@@ -106,11 +106,11 @@ const p = ModelParameters()  ## setup default parameters
 const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
 #const agebraks_vac = @SVector [0:0,1:4,5:14,15:24,25:44,45:64,65:74,75:100]
 
-export ModelParameters, HEALTH, Human, humans, BETAS
+export ModelParameters, HEALTH, VACS, Human, humans, BETAS
 
 function runsim(simnum, ip::ModelParameters)
     # function runs the `main` function, and collects the data as dataframes. 
-    hmatrix, hh1, nra, npcr, nleft = main(ip,simnum)            
+    hmatrix, vmatrix, hh1 = main(ip,simnum)            
 
     #Get the R0
     
@@ -122,9 +122,9 @@ function runsim(simnum, ip::ModelParameters)
     #ags = [x.ag_new for x in humans] # store a vector of the age group distribution 
     
     all1 = _collectdf(hmatrix)
-    spl = _splitstate(hmatrix, ags)
-    work = _collectdf(spl[1])
     
+    allv = _collectdfv(vmatrix)
+
     age_groups = [0:14, 15:24, 25:34, 35:44, 45:54, 55:64, 65:999]
     ags = map(x->findfirst(y-> x.age in y, age_groups),humans) # store a vector of the age group distribution 
     spl = _splitstate(hmatrix, ags)
@@ -135,7 +135,7 @@ function runsim(simnum, ip::ModelParameters)
     ag5 = _collectdf(spl[5])
     ag6 = _collectdf(spl[6])
     ag7 = _collectdf(spl[7])
-    insertcols!(all1, 1, :sim => simnum); insertcols!(ag1, 1, :sim => simnum); insertcols!(ag2, 1, :sim => simnum); 
+    insertcols!(all1, 1, :sim => simnum);insertcols!(allv, 1, :sim => simnum);  insertcols!(ag1, 1, :sim => simnum); insertcols!(ag2, 1, :sim => simnum); 
     insertcols!(ag3, 1, :sim => simnum); insertcols!(ag4, 1, :sim => simnum); insertcols!(ag5, 1, :sim => simnum);
     insertcols!(ag6, 1, :sim => simnum); insertcols!(ag7, 1, :sim => simnum); insertcols!(work, 1, :sim => simnum);
     
@@ -149,8 +149,8 @@ function runsim(simnum, ip::ModelParameters)
         vector_ded[(x.age+1)] += 1
     end
 
-    return (a=all1, g1=ag1, g2=ag2, g3=ag3, g4=ag4, g5=ag5,g6=ag6,g7=ag7, work = work,
-    vector_dead=vector_ded,nra=nra,npcr=npcr, R0 = R01, niso_t_p=niso_t_p)
+    return (a=all1, g1=ag1, g2=ag2, g3=ag3, g4=ag4, g5=ag5,g6=ag6,g7=ag7,allv = allv,
+    vector_dead=vector_ded, R0 = R01)
 end
 export runsim
 
@@ -165,6 +165,7 @@ function main(ip::ModelParameters,sim::Int64)
     p.popsize == 0 && error("no population size given")
     
     hmatrix = zeros(Int16, p.popsize, p.modeltime)
+    vmatrix = zeros(Int16, p.popsize, p.modeltime)
     initialize() # initialize population
     
     #h_init::Int64 = 0
@@ -177,8 +178,7 @@ function main(ip::ModelParameters,sim::Int64)
     # split population in agegroups 
     grps = get_ag_dist()
     
-    initial_dw::Int64 = 0
-
+    
     #insert one infected in the latent status in age group 4
     insert_infected(LAT, p.initialinf, 4)
 
@@ -191,8 +191,6 @@ function main(ip::ModelParameters,sim::Int64)
         get_nextday_counts(x)
     end
     
-    # distributing app_coverage
-    dist_app(humans, p)
     remaining_doses::Int64 = 0
     # start the time loop
     for st = 1:p.modeltime
@@ -202,27 +200,25 @@ function main(ip::ModelParameters,sim::Int64)
     #        if x.iso && !(x.health_status in (HOS,ICU,DED)) # Taiye: Depends on whether we are considering HOS, ICU and DED.
             if x.iso && !(x.health_status in (DED)) #&& !(x.health_status in (HOS,ICU,DED))
                 x.totaldaysiso += 1
-
             end
         end
         _get_model_state(st, hmatrix) ## this datacollection needs to be at the start of the for loop
+        _get_model_state2(st, vmatrix) ## this datacollection needs to be at the start of the for loop
         dyntrans(st, grps,sim)
         sw = time_update() ###update the system
         
         # end of day
     end
     
-    setfield!(p,:testing,true) 
-
 
     
     
-    return hmatrix, h_init1, nra, npcr, nleft## return the model state as well as the age groups. 
+    return hmatrix, vmatrix, h_init1## return the model state as well as the age groups. 
 end
 export main
 
 function vaccination(remaining_doses::Int64)
-    pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEF, PRO), humans)
+    pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
 
     if length(pos) >= p.vaccination_rate+remaining_doses
 
@@ -274,6 +270,15 @@ function _get_model_state(st, hmatrix)
 end
 export _get_model_state
 
+## Data Collection/ Model State functions
+function _get_model_state2(st, vmatrix)
+    # collects the model state (i.e. agent status at time st)
+    for i=1:length(humans)
+        vmatrix[i, st] = Int(humans[i].vac_behavior)
+    end    
+end
+export _get_model_state2
+
 function _collectdf(hmatrix)
     ## takes the output of the humans x time matrix and processes it into a dataframe
     #_names_inci = Symbol.(["lat_inc", "mild_inc", "miso_inc", "inf_inc", "iiso_inc", "hos_inc", "icu_inc", "rec_inc", "ded_inc"])    
@@ -287,6 +292,21 @@ function _collectdf(hmatrix)
     insertcols!(datf, 1, :time => 1:p.modeltime) ## add a time column to the resulting dataframe
     return datf
 end
+
+function _collectdfv(vmatrix)
+    ## takes the output of the humans x time matrix and processes it into a dataframe
+    #_names_inci = Symbol.(["lat_inc", "mild_inc", "miso_inc", "inf_inc", "iiso_inc", "hos_inc", "icu_inc", "rec_inc", "ded_inc"])    
+    #_names_prev = Symbol.(["sus", "lat", "mild", "miso", "inf", "iiso", "hos", "icu", "rec", "ded"])
+    mdf_inc, mdf_prev = _get_incidence_and_prev_v(vmatrix)
+    mdf = hcat(mdf_inc, mdf_prev)    
+    _names_inc = Symbol.(string.((Symbol.(instances(VACS)[1:end - 1])), "_INC"))
+    _names_prev = Symbol.(string.((Symbol.(instances(VACS)[1:end - 1])), "_PREV"))
+    _names = vcat(_names_inc..., _names_prev...)
+    datf = DataFrame(mdf, _names)
+    insertcols!(datf, 1, :time => 1:p.modeltime) ## add a time column to the resulting dataframe
+    return datf
+end
+
 
 function _splitstate(hmatrix, ags)
     #split the full hmatrix into 4 age groups based on ags (the array of age group of each agent)
@@ -307,6 +327,18 @@ function _get_incidence_and_prev(hmatrix)
     for i = 1:length(cols)
         inc[:, i] = _get_column_incidence(hmatrix, cols[i])
         pre[:, i] = _get_column_prevalence(hmatrix, cols[i])
+    end
+    return inc, pre
+end
+
+
+function _get_incidence_and_prev_v(vmatrix)
+    cols = instances(VACS)[1:end - 1] ## don't care about the UNDEF health status
+    inc = zeros(Int64, p.modeltime, length(cols))
+    pre = zeros(Int64, p.modeltime, length(cols))
+    for i = 1:length(cols)
+        inc[:, i] = _get_column_incidence(vmatrix, cols[i])
+        pre[:, i] = _get_column_prevalence(vmatrix, cols[i])
     end
     return inc, pre
 end
@@ -395,7 +427,7 @@ function initialize()
             x.vac_behavior = sample([PRO; LIK; HES; ANT], Weights(prob_behav[g]))
         end
         x.exp = 999  ## susceptible people don't expire.
-        x.betas_vac = getting_b_values(x,p)
+        x.betas_vac = getting_b_values(p)
         #x.dur = sample_epi_durations() # sample epi periods   
     end
 end
@@ -433,52 +465,49 @@ function insert_infected(health, num, ag)
         h = sample(l, num; replace = false)
         @inbounds for i in h 
             x = humans[i]
-            x.strain = strain
             x.dur = sample_epi_durations(x)
-            if x.strain > 0
-                if health == PRE
-                    x.swap = health
-                    x.swap_status = PRE
-                    x.daysinf = x.dur[1]+1
-                    x.wentto = 1
-                    move_to_pre(x) ## the swap may be asymp, mild, or severe, but we can force severe in the time_update function
-                elseif health == LAT
-                    x.swap = health
-                    x.swap_status = LAT
-                    x.daysinf = rand(1:x.dur[1])
-                    move_to_latent(x)
-                
-                # Taiye: We are not currently considering MILD**.
-                #elseif health == MILD
-                 #   x.swap = health
-                  #  x.swap_status = MILD
-                   # x.wentto = 1
-                    #x.daysinf = x.dur[2]+1
-                    #move_to_mild(x)
-                elseif health == INF
-                    x.swap = health
-                    x.swap_status = INF
-                    x.wentto = 1
-                    move_to_inf(x)
-                elseif health == ASYMP
-                    x.swap = health
-                    x.swap_status = ASYMP
-                    x.wentto = 2
-                    move_to_asymp(x)
-                
-                
-                elseif health == REC 
-                    x.swap = health
-                    x.swap_status = REC
-                    x.wentto = rand(1:2)
-                    move_to_recovered(x)
+            
+            if health == PRE
+                x.swap = health
+                x.swap_status = PRE
+                x.daysinf = x.dur[1]+1
+                x.wentto = 1
+                move_to_pre(x) ## the swap may be asymp, mild, or severe, but we can force severe in the time_update function
+            elseif health == LAT
+                x.swap = health
+                x.swap_status = LAT
+                x.daysinf = rand(1:x.dur[1])
+                move_to_latent(x)
+            
+            # Taiye: We are not currently considering MILD**.
+            #elseif health == MILD
+                #   x.swap = health
+                #  x.swap_status = MILD
+                # x.wentto = 1
+                #x.daysinf = x.dur[2]+1
+                #move_to_mild(x)
+            elseif health == INF
+                x.swap = health
+                x.swap_status = INF
+                x.wentto = 1
+                move_to_inf(x)
+            elseif health == ASYMP
+                x.swap = health
+                x.swap_status = ASYMP
+                x.wentto = 2
+                move_to_asymp(x)
+            
+            
+            elseif health == REC 
+                x.swap = health
+                x.swap_status = REC
+                x.wentto = rand(1:2)
+                move_to_recovered(x)
 
-                else 
-                    error("can not insert human of health $(health)")
-                end
-            else
-                error("no strain insert inf")
+            else 
+                error("can not insert human of health $(health)")
             end
+            
             
             x.sickfrom = INF # this will add +1 to the INF count in _count_infectors()... keeps the logic simple in that function.    
             
@@ -603,9 +632,6 @@ function sample_epi_durations(y::Human)
 
     lat_dist = Distributions.truncated(LogNormal(1.434, 0.661), 4, 7) # truncated between 4 and 7
     pre_dist = Distributions.truncated(Gamma(1.058, 5/2.3), 0.8, 3)#truncated between 0.8 and 3
-
-
-
     asy_dist = Gamma(5, 1)
     inf_dist = Gamma((3.2)^2/3.7, 3.7/3.2)
 
@@ -613,8 +639,8 @@ function sample_epi_durations(y::Human)
     y.incubationp = latents
     pres = Int.(round.(rand(pre_dist)))
     latents = latents - pres # ofcourse substract from latents, the presymp periods
-    asymps = max(Int.(ceil.(rand(asy_dist)))-aux,1)
-    infs = max(Int.(ceil.(rand(inf_dist)))-aux,1)
+    asymps = max(Int.(ceil.(rand(asy_dist))),1)
+    infs = max(Int.(ceil.(rand(inf_dist))),1)
 
     return (latents, asymps, pres, infs)
 end
@@ -633,7 +659,7 @@ function move_to_latent(x::Human)
     g = findfirst(y-> y >= x.age, age_thres)
 
  
-    if rand() < (symp_pcts[g])*(1-p.vaccine_eff[2])^y.vac_status
+    if rand() < (symp_pcts[g])*(1-p.vaccine_eff_symp)^x.vac_status
        
         x.swap = PRE
         x.swap_status = PRE
@@ -808,7 +834,7 @@ export _get_betavalue
     end
     
 
-    if x.health_status in (DED)
+    if x.health_status == DED
         x.nextday_meetcnt = 0
     end
    
@@ -843,10 +869,36 @@ export dyntrans
 
 function return_contacts(x, gp, g)
 
+    if g == 0
+        aux = []
+        return aux
+    end
+
+
     status = [PRO; LIK; HES; ANT]
     
     vector = [humans[i].vac_behavior for i in gp]
     
+    
+
+    if any(vector .== UNDEFV)
+
+        pos = findall(x-> humans[x].vac_behavior == UNDEFV, gp)
+
+        g1 = Int(round(g*length(pos)/length(gp)))
+
+        aux1 = sample(pos, g1)
+        g = g-g1
+
+        if g == 0
+            return gp[aux1]
+        end
+    else
+        aux1 = []
+    end
+
+    
+
     # how many times it appears
     contagens = countmap(vector)
 
@@ -862,15 +914,18 @@ function return_contacts(x, gp, g)
     
     # counting the number of contact in each group
     contagens = countmap(vector2)
-    aa = [findall(y -> y == status[i], vector) for i in eachindex(contagens)]
+    contagem_vetor = [get(contagens, i, 0) for i in status]
+    aa = [findall(y -> y == status[i], vector) for i in eachindex(contagem_vetor)]
     aux = repeat([[]], length(aa))
-    for i in eachindex(contagens)
+    for i in eachindex(contagem_vetor)
         if length(aa[i]) > 0
-            aux[i] = sample(aa[i], contagens[i], replace = true)
+            aux[i] = sample(aa[i], contagem_vetor[i], replace = true)
         end
     end
 
     aux = vcat(aux...)
+
+    aux = [aux;aux1]
 
     return gp[aux]
 
@@ -890,7 +945,7 @@ function perform_contacts(x,gpw,grp_sample,xhealth)
 
             ycnt == 0 && continue
             
-            if x.vac_status*y.vac_status == 1 # only gets to it if it is necessary
+            if x.vac_status*y.vac_status == 0 # only gets to it if it is necessary
                 if x.vac_status == 0 && x.vac_behavior != UNDEF
                     y.contacts_vac[Int(x.vac_behavior)+1] += 1
                 end
@@ -933,10 +988,10 @@ function perform_contacts(x,gpw,grp_sample,xhealth)
 
             if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
                 aux = 1
-                beta = _get_betavalue(xhealth)*(1-p.vaccine_eff[1])^y.vac_status
+                beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
             elseif xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
                 aux = 2
-                beta = _get_betavalue(y.health)*(1-p.vaccine_eff[1])^x.vac_status
+                beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
             else
                 beta = 0.0
             end
