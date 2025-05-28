@@ -694,24 +694,17 @@ end
 export move_to_asymp
 
 function move_to_pre(x::Human)
-    if x.strain == 1 
-        θ = (0.95, 0.9, 0.85, 0.6, 0.2)  # percentage of sick individuals going to mild infection stage
-    elseif x.strain == 2 || x.strain == 3
-        θ = (0.89, 0.78, 0.67, 0.48, 0.04)
-    else
-        error("no strain in move to pre")
-    end  # percentage of sick individuals going to mild infection stage
+    #θ = (0.95, 0.9, 0.85, 0.6, 0.2)
+    
     x.health = x.swap
     x.health_status = x.swap_status
     x.tis = 0   # reset time in state 
     x.exp = x.dur[3] # get the presymptomatic period
     ##########
 
-    
-    
     x.swap = INF
     x.swap_status = INF
-    
+ 
     
 end
 export move_to_pre
@@ -726,26 +719,14 @@ function move_to_inf(x::Human)
     groups = [0:34,35:54,55:69,70:84,85:100]
     gg = findfirst(y-> x.age in y,groups)
 
-    mh = [0.0002; 0.0015; 0.011; 0.0802; 0.381] # death rate for severe cases.
+    mh = [0.0002; 0.0015; 0.011; 0.0802; 0.381] # death rate for cases.
  
-    # Taiye: The following lines might be unnecessary.
-    #comh = 0.98
-    #h = x.comorbidity == 1 ? comh : 0.04 #0.376
-    #c = x.comorbidity == 1 ? 0.396 : 0.25
-    #time_to_hospital = Int(round(rand(Uniform(2, 5)))) # duration symptom onset to hospitalization
-   	
     x.health = x.swap
     x.health_status = x.swap_status
     x.swap = UNDEF
     
     x.tis = 0 
     
-    #? Thomas:
-    if p.testing && !x.testedpos && x.has_app
-        #testing_infection(x, p.test_ra)
-        x.notified = true
-        humans[i].timetotest = 1
-    end
 
        
    # else ## no hospital for this lucky (but severe) individual 

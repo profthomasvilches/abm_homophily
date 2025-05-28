@@ -93,28 +93,6 @@ end
 
 
 
-function savestr(p::cv.ModelParameters, custominsert="/", customstart="")
-    datestr = (Dates.format(Dates.now(), dateformat"mmdd_HHMM"))
-    ## setup folder name based on model parameters
-    taustr = replace(string(p.τmild), "." => "")
-    fstr = replace(string(p.fmild), "." => "")
-    rstr = replace(string(p.β), "." => "")
-    prov = replace(string(p.prov), "." => "")
-    eldr = replace(string(p.eldq), "." => "")
-    eldqag = replace(string(p.eldqag), "." => "")     
-    fpreiso = replace(string(p.fpreiso), "." => "")
-    tpreiso = replace(string(p.tpreiso), "." => "")
-    fsev = replace(string(p.fsevere), "." => "")    
-    frelasymp = replace(string(p.frelasymp), "." => "")
-    strat = replace(string(p.ctstrat), "." => "")
-    pct = replace(string(p.fctcapture), "." => "")
-    cct = replace(string(p.fcontactst), "." => "")
-    idt = replace(string(p.cidtime), "." => "") 
-    tback = replace(string(p.cdaysback), "." => "")     
-    fldrname = "/data/covid19abm/simresults/$(custominsert)/$(customstart)_$(prov)_strat$(strat)_pct$(pct)_cct$(cct)_idt$(idt)_tback$(tback)_fsev$(fsev)_tau$(taustr)_fmild$(fstr)_q$(eldr)_qag$(eldqag)_relasymp$(frelasymp)_tpreiso$(tpreiso)_preiso$(fpreiso)/"
-    mkpath(fldrname)
-end
-
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
     RF = string("/data/thomas/homophily/") ## 
