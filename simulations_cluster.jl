@@ -1,13 +1,16 @@
 using Distributed
+
+rmprocs(workers())
+
 using Base.Filesystem
 using DataFrames
 using CSV
 using Query
 using Statistics
-using UnicodePlots
 using ClusterManagers
 using Dates
 using DelimitedFiles
+
 
 ## load the packages by covid19abm
 
@@ -35,8 +38,7 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     println("simulations finished")
     println("total size of simulation dataframes: $(Base.summarysize(cdr))")
     ## write the infectors 
-    DelimitedFiles.writedlm("$(folderprefix)/infectors.dat", [cdr[i].infectors for i = 1:nsims])    
-
+    
     ## write contact numbers
     #writedlm("$(folderprefix)/ctnumbers.dat", [cdr[i].ct_numbers for i = 1:nsims])    
     ## stack the sims together
@@ -57,7 +59,8 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     c1 = Symbol.((:LAT, :ASYMP, :INF, :DED), :_INC)
     #c2 = Symbol.((:LAT, :ASYMP, :INF, :IISO, :HOS, :ICU, :DED), :_PREV)
     #c1 = Symbol.((:LAT, :HOS, :ICU, :DED), :_INC)
-    c2 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEF), :_INC)
+    c2 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEFV), :_INC)
+    c3 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEFV), :_PREV)
    for (k, df) in mydfs
 
         if k != "allv"
@@ -79,12 +82,13 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
                 fn = string("$(folderprefix)/simlevel_", lowercase(string(c)), "_", k, ".dat")
                 CSV.write(fn, udf)
             end
+            for c in vcat(c3...)
+                udf = unstack(df, :time, :sim, c) 
+                fn = string("$(folderprefix)/simlevel_", lowercase(string(c)), "_", k, ".dat")
+                CSV.write(fn, udf)
+            end
             println("saving dataframe time level: $k")
         end
-        
-        
-
-
 
     end
 
@@ -95,19 +99,20 @@ end
 
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
-    RF = string("/data/thomas/homophily/") ## 
+    #RF = string("/data/thomas/homophily/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+    RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)
         Base.Filesystem.mkpath(RF)
     end
     return RF
 end
 
-function run_param(fidx::Int16, beta::Float64, hh::Float64, bb::Float64 = 0.5; scen::Symbol = :prob, )
+function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 10, pops::Int64 = 1000, nsims::Int64 = 1000)
     
-    @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), b = $bb, b_value = $scen, file_index = $fidx)
+    @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), b = $bb, b_value=$(QuoteNode(scen)), file_index = $fidx,
+    vaccination_rate = $vac_rate, popsize = $pops)
     folder = create_folder_new(ip)
 
-    println("$h_i $isos")
     run(ip,nsims,folder)
     
 end

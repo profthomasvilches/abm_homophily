@@ -137,7 +137,7 @@ function runsim(simnum, ip::ModelParameters)
     ag7 = _collectdf(spl[7])
     insertcols!(all1, 1, :sim => simnum);insertcols!(allv, 1, :sim => simnum);  insertcols!(ag1, 1, :sim => simnum); insertcols!(ag2, 1, :sim => simnum); 
     insertcols!(ag3, 1, :sim => simnum); insertcols!(ag4, 1, :sim => simnum); insertcols!(ag5, 1, :sim => simnum);
-    insertcols!(ag6, 1, :sim => simnum); insertcols!(ag7, 1, :sim => simnum); insertcols!(work, 1, :sim => simnum);
+    insertcols!(ag6, 1, :sim => simnum); insertcols!(ag7, 1, :sim => simnum);
     
 
     pos = findall(y-> y in (11,22,33),hmatrix[:,end])
@@ -299,8 +299,8 @@ function _collectdfv(vmatrix)
     #_names_prev = Symbol.(["sus", "lat", "mild", "miso", "inf", "iiso", "hos", "icu", "rec", "ded"])
     mdf_inc, mdf_prev = _get_incidence_and_prev_v(vmatrix)
     mdf = hcat(mdf_inc, mdf_prev)    
-    _names_inc = Symbol.(string.((Symbol.(instances(VACS)[1:end - 1])), "_INC"))
-    _names_prev = Symbol.(string.((Symbol.(instances(VACS)[1:end - 1])), "_PREV"))
+    _names_inc = Symbol.(string.((Symbol.(instances(VACS)[1:end])), "_INC"))
+    _names_prev = Symbol.(string.((Symbol.(instances(VACS)[1:end])), "_PREV"))
     _names = vcat(_names_inc..., _names_prev...)
     datf = DataFrame(mdf, _names)
     insertcols!(datf, 1, :time => 1:p.modeltime) ## add a time column to the resulting dataframe
@@ -333,7 +333,7 @@ end
 
 
 function _get_incidence_and_prev_v(vmatrix)
-    cols = instances(VACS)[1:end - 1] ## don't care about the UNDEF health status
+    cols = instances(VACS)[1:end] ## don't care about the UNDEF health status
     inc = zeros(Int64, p.modeltime, length(cols))
     pre = zeros(Int64, p.modeltime, length(cols))
     for i = 1:length(cols)
@@ -824,12 +824,39 @@ export _get_betavalue
     return cnt
 end
 
+function calculate_H(gp)
+    
+    status = [PRO; LIK; HES; ANT]
+    
+    vector = [humans[i].vac_behavior for i in gp]
+    
+    
+    # how many times it appears
+    contagens = countmap(vector)
+
+    contagem_vetor = [get(contagens, i, 0) for i in status]
+    # probabilities based on homophily
+    
+    Pj = zeros(Float64, length(status), length(status))
+    if sum(contagem_vetor) > 0
+        for br in status
+            H = p.h .* Int.(br .== status)+(1-p.h) .* contagem_vetor./sum(contagem_vetor)
+            Pj[Int(br)+1,:] = H ./ sum(H)
+        end
+    end
+    return Pj
+end
+
 function dyntrans(sys_time, grps,sim)
     #totalmet = 0 # count the total number of contacts (total for day, for all INF contacts)
     #totalinf = 0 # count number of new infected 
     ## find all the people infectious
     #rng = MersenneTwister(246*sys_time*sim)
+
+    Pj = map(x->calculate_H(x), grps)
+
     pos = shuffle(1:length(humans))
+
     # go through every infectious person
     for x in humans[pos]        
            
@@ -842,25 +869,29 @@ function dyntrans(sys_time, grps,sim)
             #cnts = number of contacts on that day
 
             
-            perform_contacts(x,gpw,grps,xhealth)
+            perform_contacts(x,gpw,grps,xhealth, Pj)
     end
     #return totalmet, totalinf
 end
 export dyntrans
 
-function return_contacts(x, gp, g)
+function return_contacts(x, gp, g, Pj)
 
     if g == 0
         aux = []
         return aux
     end
 
+    if x.vac_behavior == UNDEFV
+        # if the individual does not require behavior, we sample it from uniform
+        aux1 = sample(gp, g)
+        return aux1
+    end
+
 
     status = [PRO; LIK; HES; ANT]
     
     vector = [humans[i].vac_behavior for i in gp]
-    
-    
 
     if any(vector .== UNDEFV)
 
@@ -878,18 +909,9 @@ function return_contacts(x, gp, g)
         aux1 = []
     end
 
-    
-
-    # how many times it appears
-    contagens = countmap(vector)
-
-    contagem_vetor = [get(contagens, i, 0) for i in status]
-    # probabilities based on homophily
-    H = p.h .* Int.(x.vac_behavior .== status)+(1-p.h) .* contagem_vetor./sum(contagem_vetor)
-    Pj = H ./ sum(H)
-
+    Pjj = Pj[Int(x.vac_behavior)+1, :]
     # sampling the groups based on H
-    gr = sample(1:length(Pj), Weights(Pj), g, replace = true)
+    gr = sample(1:length(Pjj), Weights(Pjj), g, replace = true)
     
     vector2 = [status[i] for i in gr]
     
@@ -912,10 +934,10 @@ function return_contacts(x, gp, g)
 
 end
 
-function perform_contacts(x,gpw,grp_sample,xhealth)
+function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
 
     for (i, g) in enumerate(gpw) 
-        meet = return_contacts(x, grp_sample[i], g)#rand(grp_sample[i], g)   # sample the people from each group
+        meet = return_contacts(x, grp_sample[i], g, Pj[i])#rand(grp_sample[i], g)   # sample the people from each group
         # go through each person
         for j in meet 
             y = humans[j]
@@ -982,7 +1004,7 @@ function perform_contacts(x,gpw,grp_sample,xhealth)
                     y.exp = y.tis   ## force the move to latent in the next time step.
                     y.sickfrom = xhealth ## stores the infector's status to the infectee's sickfrom
                     y.sickby = y.sickby < 0 ? x.idx : y.sickby
-                    y.strain = x.strain       
+                           
                     y.swap = LAT
                     y.swap_status = LAT
                     y.daysinf = 0
