@@ -75,7 +75,7 @@ end
     prov::Symbol = :usa
     calibration::Bool = false
     start_several_inf::Bool = true
-    modeltime::Int64 = 435
+    modeltime::Int64 = 200
     initialinf::Int64 = 1
     fmild::Float64 = 0.5  ## percent of people practice self-isolation
     # Taiye: Could be useful later for keeping track of the population in isolation.
@@ -218,6 +218,9 @@ end
 export main
 
 function vaccination(remaining_doses::Int64)
+    if p.vaccination_rate == 0
+        return 0
+    end
     pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
 
     if length(pos) >= p.vaccination_rate+remaining_doses
