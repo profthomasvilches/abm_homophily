@@ -110,7 +110,7 @@ export ModelParameters, HEALTH, VACS, Human, humans, BETAS
 
 function runsim(simnum, ip::ModelParameters)
     # function runs the `main` function, and collects the data as dataframes. 
-    hmatrix, vmatrix, hh1 = main(ip,simnum)            
+    hmatrix, vmatrix, hh1,vac_number = main(ip,simnum)            
 
     #Get the R0
     
@@ -150,7 +150,7 @@ function runsim(simnum, ip::ModelParameters)
     end
 
     return (a=all1, g1=ag1, g2=ag2, g3=ag3, g4=ag4, g5=ag5,g6=ag6,g7=ag7,allv = allv,
-    vector_dead=vector_ded, R0 = R01)
+    vector_dead=vector_ded, R0 = R01, vac_number = vac_number)
 end
 export runsim
 
@@ -178,7 +178,7 @@ function main(ip::ModelParameters,sim::Int64)
     # split population in agegroups 
     grps = get_ag_dist()
     
-    
+    vac_number = zeros(Int64, p.modeltime)
     #insert one infected in the latent status in age group 4
     insert_infected(LAT, p.initialinf, 4)
 
@@ -195,6 +195,8 @@ function main(ip::ModelParameters,sim::Int64)
     # start the time loop
     for st = 1:p.modeltime
         
+        vac_number[st] = sum([x.vac_status for x in humans])
+
         remaining_doses = vaccination(remaining_doses)
         for x in humans
     #        if x.iso && !(x.health_status in (HOS,ICU,DED)) # Taiye: Depends on whether we are considering HOS, ICU and DED.
@@ -213,7 +215,7 @@ function main(ip::ModelParameters,sim::Int64)
 
     
     
-    return hmatrix, vmatrix, h_init1## return the model state as well as the age groups. 
+    return hmatrix, vmatrix, h_init1, vac_number## return the model state as well as the age groups. 
 end
 export main
 

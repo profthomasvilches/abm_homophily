@@ -94,8 +94,10 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
 
 
     R01 = [cdr[i].R0 for i=1:nsims]
+    vac_number = [cdr[i].vac_number for i=1:nsims]
    
     writedlm(string(folderprefix,"/R01.dat"),R01)
+    writedlm(string(folderprefix,"/vac_number.dat"),vac_number)
 
     return mydfs
 end
