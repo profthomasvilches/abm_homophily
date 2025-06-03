@@ -558,6 +558,9 @@ export time_update
 
 function update_behavior(x)
 
+    #? create a vector of Pv, Pa...
+    #? 
+
     if x.vac_behavior == LIK
         # probability of getting PRO
         n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1]
@@ -570,11 +573,14 @@ function update_behavior(x)
         # probability related to vaccinated and recovered
         n3 = x.contacts_vac[5]
         prob3 = (1-x.betas_vac[5])^n3
-
-        if rand() < 1-prob1*prob2*prob3 # probability of getting at least one of the changes
-            if rand() < (1-prob1)/((1-prob1)+(1-prob2*prob3))
+        #? go to pro or Hes
+        #? 1-prob1*prob2*prob3
+        if rand() < (1-prob1)/((1-prob1)+(1-prob2*prob3))
+            if rand() < 1-prob1 #? Is the individual changing?
                 x.vac_behavior = PRO
-            else
+            end
+        else
+            if rand() < 1-prob2*prob3
                 x.vac_behavior = HES
             end
         end
@@ -588,13 +594,15 @@ function update_behavior(x)
           prob2 = (1-x.betas_vac[4])^n2
   
   
-          if rand() < 1-prob1*prob2 # probability of getting at least one of the changes
-              if rand() < (1-prob1)/((1-prob1)+(1-prob2))
-                  x.vac_behavior = PRO
-              else
-                  x.vac_behavior = ANT
-              end
-          end
+        if rand() < (1-prob1)/((1-prob1)+(1-prob2))
+            if rand() < 1-prob1
+                x.vac_behavior = PRO
+            end
+        else
+            if rand() < 1-prob2
+                x.vac_behavior = ANT
+            end
+        end 
     elseif x.vac_behavior == ANT
         # probability of getting likely
         n1 = x.contacts_vac[8] # number of vaccinated in contact
