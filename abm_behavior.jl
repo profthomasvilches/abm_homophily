@@ -223,7 +223,8 @@ function vaccination(remaining_doses::Int64)
     if p.vaccination_rate == 0
         return 0
     end
-    pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
+    # pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
+    pos = findall(x -> x.vac_status == 0 && x.vac_behavior == PRO, humans)
 
     if length(pos) >= p.vaccination_rate+remaining_doses
 
@@ -241,7 +242,7 @@ function vaccination(remaining_doses::Int64)
 
         remaining_doses = p.vaccination_rate+remaining_doses-length(pos)
     end
-    return remaining_doses
+    return 0#remaining_doses
 end
 
 function reset_params(ip::ModelParameters)
@@ -383,19 +384,6 @@ export _collectdf, _get_incidence_and_prev, _get_column_incidence, _get_column_p
 ## initialization functions 
 function get_province_ag(prov) 
     ret = @match prov begin
-       #= :alberta => Distributions.Categorical(@SVector [0.0655, 0.1851, 0.4331, 0.1933, 0.1230])
-        :bc => Distributions.Categorical(@SVector [0.0475, 0.1570, 0.3905, 0.2223, 0.1827])
-        :manitoba => Distributions.Categorical(@SVector [0.0634, 0.1918, 0.3899, 0.1993, 0.1556])
-        :newbruns => Distributions.Categorical(@SVector [0.0460, 0.1563, 0.3565, 0.2421, 0.1991])
-        :newfdland => Distributions.Categorical(@SVector [0.0430, 0.1526, 0.3642, 0.2458, 0.1944])
-        :nwterrito => Distributions.Categorical(@SVector [0.0747, 0.2026, 0.4511, 0.1946, 0.0770])
-        :novasco => Distributions.Categorical(@SVector [0.0455, 0.1549, 0.3601, 0.2405, 0.1990])
-        :nunavut => Distributions.Categorical(@SVector [0.1157, 0.2968, 0.4321, 0.1174, 0.0380])
-        :pei => Distributions.Categorical(@SVector [0.0490, 0.1702, 0.3540, 0.2329, 0.1939])
-        :quebec => Distributions.Categorical(@SVector [0.0545, 0.1615, 0.3782, 0.2227, 0.1831])
-        :saskat => Distributions.Categorical(@SVector [0.0666, 0.1914, 0.3871, 0.1997, 0.1552])
-        :yukon => Distributions.Categorical(@SVector [0.0597, 0.1694, 0.4179, 0.2343, 0.1187])
-        :newyorkcity   => Distributions.Categorical(@SVector [0.064000, 0.163000, 0.448000, 0.181000, 0.144000])=#
         :usa => Distributions.Categorical(@SVector [0.059444636404977,0.188450296592341,0.396101793107413,0.189694011721906,0.166309262173363])
         # :ontario => Distributions.Categorical(@SVector [0.04807822, 0.10498712, 0.12470340, 0.14498051, 0.13137129, 0.12679091, 0.13804896, 0.10292032, 0.05484776, 0.02327152])
         # :canada => Distributions.Categorical(@SVector [0.04922255,0.10812899,0.11792442,0.13956709,0.13534216,0.12589012,0.13876094,0.10687438,0.05550450,0.02278485])
@@ -449,7 +437,7 @@ function getting_b_values(p::ModelParameters)
         b3 = rand(Distributions.Beta(2, 25)) #bh
         b4 = rand(Distributions.Beta(1, 200)) #bl
         b5 = rand(Distributions.Beta(1.2, 20)) #be
-        return [b1; b3; b4; b2; b5]
+        return [b1; b3; b4; b2./2; b5]./10
     else
         error("no strategy set for b values")
     end
@@ -584,10 +572,7 @@ function update_behavior(x)
             end
         else
             if rand() < 1-prob2*prob3
-                println("entrou aqui")
-                println("$prob1 $prob2 $prob3")
-                dump(x)
-                readline()
+                
                 x.vac_behavior = HES
             end
         end
@@ -603,7 +588,7 @@ function update_behavior(x)
   
         if rand() < (1-prob1)/((1-prob1)+(1-prob2))
             if rand() < 1-prob1
-                x.vac_behavior = PRO
+                x.vac_behavior = LIK
             end
         else
             if rand() < 1-prob2
@@ -618,7 +603,7 @@ function update_behavior(x)
 
         if rand() < 1-prob1 # probability of getting at least one of the changes
             
-            x.vac_behavior = LIK
+            x.vac_behavior = HES
             
         end
     end
