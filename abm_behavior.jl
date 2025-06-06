@@ -575,12 +575,19 @@ function update_behavior(x)
         prob3 = (1-x.betas_vac[5])^n3
         #? go to pro or Hes
         #? 1-prob1*prob2*prob3
+        if ((1-prob1)+(1-prob2*prob3)) == 0
+            return
+        end
         if rand() < (1-prob1)/((1-prob1)+(1-prob2*prob3))
             if rand() < 1-prob1 #? Is the individual changing?
                 x.vac_behavior = PRO
             end
         else
             if rand() < 1-prob2*prob3
+                println("entrou aqui")
+                println("$prob1 $prob2 $prob3")
+                dump(x)
+                readline()
                 x.vac_behavior = HES
             end
         end
@@ -890,6 +897,8 @@ export dyntrans
 
 function return_contacts(x, gp, g, Pj)
 
+    gp = [i for i in gp if i != x.idx]
+
     if g == 0
         aux = []
         return aux
@@ -904,11 +913,11 @@ function return_contacts(x, gp, g, Pj)
 
     status = [PRO; LIK; HES; ANT]
     
-    vector = [humans[i].vac_behavior for i in gp]
+    vector = [humans[i].vac_behavior for i in gp if i != x.idx]
 
     if any(vector .== UNDEFV)
 
-        pos = findall(x-> humans[x].vac_behavior == UNDEFV, gp)
+        pos = findall(y-> humans[y].vac_behavior == UNDEFV && y != x.idx, gp)
 
         g1 = Int(round(g*length(pos)/length(gp)))
 
@@ -951,7 +960,7 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
 
     for (i, g) in enumerate(gpw) 
         meet = return_contacts(x, grp_sample[i], g, Pj[i])#rand(grp_sample[i], g)   # sample the people from each group
-        # go through each person
+        # go through edach person
         for j in meet 
             y = humans[j]
 
@@ -962,11 +971,11 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
             ycnt == 0 && continue
             
             if x.vac_status*y.vac_status == 0 # only gets to it if it is necessary
-                if x.vac_status == 0 && x.vac_behavior != UNDEF
+                if x.vac_status == 0 && x.vac_behavior != UNDEFV
                     y.contacts_vac[Int(x.vac_behavior)+1] += 1
                 end
     
-                if y.vac_status == 0 && y.vac_behavior != UNDEF
+                if y.vac_status == 0 && y.vac_behavior != UNDEFV
                     x.contacts_vac[Int(y.vac_behavior)+1] += 1
                 end
     
