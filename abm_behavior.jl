@@ -95,7 +95,7 @@ end
     # hosp_red::Float64 = 3.1 # Taiye: We can add this if we decide to include hospitalizations.
     isolation_days::Int64 = 5
     probrec::Union{Nothing, Float64} = nothing
-    groupinitial::Union{Nothing, VACS} = nothing
+    groupinitial::Union{Nothing, Int8} = nothing
 end
 
 
@@ -458,7 +458,8 @@ function insert_infected(health, num, ag)
     if isnothing(p.groupinitial)
         l = findall(x -> x.health == SUS && x.ag == ag, humans)
     else
-        l = findall(x -> x.health == SUS && x.vac_behavior == p.groupinitial && x.ag == ag, humans)
+        v = [PRO; LIK; HES; ANT]
+        l = findall(x -> x.health == SUS && x.vac_behavior == v[p.groupinitial] && x.ag == ag, humans)
     end
     if length(l) > 0 && num < length(l)
         h = sample(l, num; replace = false)
