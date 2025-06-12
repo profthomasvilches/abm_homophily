@@ -13,7 +13,7 @@ using DelimitedFiles
 
 
 
-addprocs(SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=.")
+addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=.")
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
 @everywhere const cv=abmbehavior
@@ -98,7 +98,11 @@ end
 
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
-    RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+    if isnothing(ip.probrec)
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+    else
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+    end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)
         Base.Filesystem.mkpath(RF)
@@ -106,10 +110,11 @@ function create_folder_new(ip::cv.ModelParameters)
     return RF
 end
 
-function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, pops::Int64 = 10000, nsims::Int64 = 1000)
+function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, VACS} = nothing, pops::Int64 = 10000, nsims::Int64 = 1000)
     
     @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), b = $bb, b_value=$(QuoteNode(scen)), file_index = $fidx,
-    vaccination_rate = $vac_rate, popsize = $pops, vaccine_eff = $ve, vaccine_eff_symp = $ves)
+    vaccination_rate = $vac_rate, popsize = $pops, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec,
+    groupinitial = $group_init)
     folder = create_folder_new(ip)
 
     run(ip,nsims,folder)

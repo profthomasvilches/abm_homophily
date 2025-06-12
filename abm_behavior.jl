@@ -94,6 +94,8 @@ end
     b = 0.5
     # hosp_red::Float64 = 3.1 # Taiye: We can add this if we decide to include hospitalizations.
     isolation_days::Int64 = 5
+    probrec::Union{Nothing, Float64} = nothing
+    groupinitial::Union{Nothing, VACS} = nothing
 end
 
 
@@ -436,7 +438,7 @@ function getting_b_values(p::ModelParameters)
         b2 = rand(Distributions.Beta(1.5, 20)) #ba
         b3 = rand(Distributions.Beta(2, 25)) #bh
         b4 = rand(Distributions.Beta(1, 200)) #bl
-        b5 = rand(Distributions.Beta(1.2, 20)) #be
+        b5 = isnothing(p.probrec) ? rand(Distributions.Beta(2, 20)) : p.probrec #be
         return [b1; b3; b4; b2./2; b5]./10
     else
         error("no strategy set for b values")
@@ -453,7 +455,11 @@ end
 function insert_infected(health, num, ag) 
     ## inserts a number of infected people in the population randomly
     ## this function should resemble move_to_inf()
-    l = findall(x -> x.health == SUS && x.ag == ag, humans)
+    if isnothing(p.groupinitial)
+        l = findall(x -> x.health == SUS && x.ag == ag, humans)
+    else
+        l = findall(x -> x.health == SUS && x.vac_behavior == p.groupinitial && x.ag == ag, humans)
+    end
     if length(l) > 0 && num < length(l)
         h = sample(l, num; replace = false)
         @inbounds for i in h 
