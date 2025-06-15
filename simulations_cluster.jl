@@ -13,7 +13,7 @@ using DelimitedFiles
 
 
 
-addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=.")
+addprocs(ClusterManagers.SlurmManager(125), N=4, topology=:master_worker, exeflags="--project=Project.toml")
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
 @everywhere const cv=abmbehavior
