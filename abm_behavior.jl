@@ -400,8 +400,8 @@ function initialize()
     agedist = get_province_ag(p.prov)
     #agebraksnew = [0:4,5:14,15:24,25:34,35:44,45:54,55:64,65:74,75:84,85:99]
     
-    age_break_behav = [18:24,25:49,50:64,65:99]
-    prob_behav = [[0.38;0.214;0.205;0.088],[0.271;0.241;0.303;0.084],[0.322;0.302;0.223;0.053],[0.471;0.288;0.131;0.04]]
+    age_break_behav = [0:17,18:24,25:49,50:64,65:99]
+    prob_behav = [[0.271;0.241;0.303;0.084],[0.38;0.214;0.205;0.088],[0.271;0.241;0.303;0.084],[0.322;0.302;0.223;0.053],[0.471;0.288;0.131;0.04]]
     a = [4;19;49;64;79;999]
      
     for i = 1:p.popsize 
@@ -417,7 +417,7 @@ function initialize()
         
         x.ag_new = g
         
-        if x.age >= 18
+        if x.age >= 0
             g = findfirst(y->x.age ∈ y, age_break_behav)
             x.vac_behavior = sample([PRO; LIK; HES; ANT], Weights(prob_behav[g]))
         end
