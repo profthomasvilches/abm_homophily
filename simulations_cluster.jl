@@ -1,19 +1,18 @@
 using Distributed
 
-rmprocs(workers())
-
 using Base.Filesystem
 using DataFrames
 using CSV
 using Query
 using Statistics
-using ClusterManagers
+#using ClusterManagers
 using Dates
 using DelimitedFiles
 
+ENV["JULIA_WORKER_TIMEOUT"] = "180"
 
-
-addprocs(ClusterManagers.SlurmManager(125), N=4, topology=:master_worker, exeflags="--project=Project.toml")
+addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
+#addprocs(10)
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
 @everywhere const cv=abmbehavior
@@ -36,14 +35,14 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     ## stack the sims together
     allag = vcat([cdr[i].a  for i = 1:nsims]...)
     allv = vcat([cdr[i].allv  for i = 1:nsims]...)
-    ag1 = vcat([cdr[i].g1 for i = 1:nsims]...)
-    ag2 = vcat([cdr[i].g2 for i = 1:nsims]...)
-    ag3 = vcat([cdr[i].g3 for i = 1:nsims]...)
-    ag4 = vcat([cdr[i].g4 for i = 1:nsims]...)
-    ag5 = vcat([cdr[i].g5 for i = 1:nsims]...)
-    ag6 = vcat([cdr[i].g5 for i = 1:nsims]...)
-    ag7 = vcat([cdr[i].g5 for i = 1:nsims]...)
-    mydfs = Dict("all" => allag, "allv" => allv, "ag1" => ag1, "ag2" => ag2, "ag3" => ag3, "ag4" => ag4, "ag5" => ag5, "ag6" => ag6, "ag7" => ag7)
+    # ag1 = vcat([cdr[i].g1 for i = 1:nsims]...)
+    # ag2 = vcat([cdr[i].g2 for i = 1:nsims]...)
+    # ag3 = vcat([cdr[i].g3 for i = 1:nsims]...)
+    # ag4 = vcat([cdr[i].g4 for i = 1:nsims]...)
+    # ag5 = vcat([cdr[i].g5 for i = 1:nsims]...)
+    # ag6 = vcat([cdr[i].g5 for i = 1:nsims]...)
+    # ag7 = vcat([cdr[i].g5 for i = 1:nsims]...)
+    mydfs = Dict("all" => allag, "allv" => allv)#, "ag1" => ag1, "ag2" => ag2, "ag3" => ag3, "ag4" => ag4, "ag5" => ag5, "ag6" => ag6, "ag7" => ag7)
     #mydfs = Dict("all" => allag)
     
     ## save at the simulation and time level
@@ -100,8 +99,10 @@ function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
     if isnothing(ip.probrec)
         RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     else
         RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
     end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)

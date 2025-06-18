@@ -31,7 +31,7 @@ Base.@kwdef mutable struct Human
     swap_status::HEALTH = UNDEF
     sickfrom::HEALTH = UNDEF
     sickby::Int64 = -1
-    nextday_meetcnt::Int16 = 0 ## how many contacts for a single day
+    nextday_meetcnt::UInt8 = 0 ## how many contacts for a single day
     age::Int16   = 0    # in years. don't really need this but left it incase needed later
     ag::Int16   = 0
     tis::Int16   = 0   # time in state 
@@ -40,7 +40,7 @@ Base.@kwdef mutable struct Human
     doi::Int16   = 999   # day of infection.
     iso::Bool = false  ## isolated (limited contacts)
     isovia::Symbol = :null ## isolated via quarantine (:qu), preiso (:pi), intervention measure (:im), or contact tracing (:ct)    
-    contacts_vac::Vector{Int64} = [0;0;0;0;0;0;0;0] # PRO NV; LIK; HES; ANTI; REC vac; DED vac; PRO VAC; VAC  
+    contacts_vac::Vector{UInt8} = UInt8.([0;0;0;0;0;0;0;0]) # PRO NV; LIK; HES; ANTI; REC vac; DED vac; PRO VAC; VAC  
     #comorbidity::Int8 = 0 ##does the individual has any comorbidity?
     # Taiye: We are not considering comorbidities at this stage.
 
@@ -61,9 +61,9 @@ Base.@kwdef mutable struct Human
     daysinf::Int64 = 999 
     isofalse::Bool = false
     
-    betas_vac::Vector{Float64} = [0.0; 0.0; 0.0; 0.0; 0.0] # bs, bh, bl, ba, be
+    betas_vac::Vector{Float32} = Float32.([0.0; 0.0; 0.0; 0.0; 0.0]) # bs, bh, bl, ba, be
    
-    totaldaysiso::Int32 = 0  
+    totaldaysiso::Int16 = 0  
 end
 
 ## default system parameters
@@ -129,17 +129,17 @@ function runsim(simnum, ip::ModelParameters)
 
     age_groups = [0:14, 15:24, 25:34, 35:44, 45:54, 55:64, 65:999]
     ags = map(x->findfirst(y-> x.age in y, age_groups),humans) # store a vector of the age group distribution 
-    spl = _splitstate(hmatrix, ags)
-    ag1 = _collectdf(spl[1])
-    ag2 = _collectdf(spl[2])
-    ag3 = _collectdf(spl[3])
-    ag4 = _collectdf(spl[4])
-    ag5 = _collectdf(spl[5])
-    ag6 = _collectdf(spl[6])
-    ag7 = _collectdf(spl[7])
-    insertcols!(all1, 1, :sim => simnum);insertcols!(allv, 1, :sim => simnum);  insertcols!(ag1, 1, :sim => simnum); insertcols!(ag2, 1, :sim => simnum); 
-    insertcols!(ag3, 1, :sim => simnum); insertcols!(ag4, 1, :sim => simnum); insertcols!(ag5, 1, :sim => simnum);
-    insertcols!(ag6, 1, :sim => simnum); insertcols!(ag7, 1, :sim => simnum);
+    #spl = _splitstate(hmatrix, ags)
+    # ag1 = _collectdf(spl[1])
+    # ag2 = _collectdf(spl[2])
+    # ag3 = _collectdf(spl[3])
+    # ag4 = _collectdf(spl[4])
+    # ag5 = _collectdf(spl[5])
+    # ag6 = _collectdf(spl[6])
+    # ag7 = _collectdf(spl[7])
+    insertcols!(all1, 1, :sim => simnum);insertcols!(allv, 1, :sim => simnum); # insertcols!(ag1, 1, :sim => simnum); insertcols!(ag2, 1, :sim => simnum); 
+    #insertcols!(ag3, 1, :sim => simnum); insertcols!(ag4, 1, :sim => simnum); insertcols!(ag5, 1, :sim => simnum);
+    #insertcols!(ag6, 1, :sim => simnum); insertcols!(ag7, 1, :sim => simnum);
     
 
     pos = findall(y-> y in (11,22,33),hmatrix[:,end])
@@ -151,7 +151,7 @@ function runsim(simnum, ip::ModelParameters)
         vector_ded[(x.age+1)] += 1
     end
 
-    return (a=all1, g1=ag1, g2=ag2, g3=ag3, g4=ag4, g5=ag5,g6=ag6,g7=ag7,allv = allv,
+    return (a=all1, allv = allv, #g1=ag1, g2=ag2, g3=ag3, g4=ag4, g5=ag5,g6=ag6,g7=ag7,
     vector_dead=vector_ded, R0 = R01, vac_number = vac_number)
 end
 export runsim
@@ -435,11 +435,11 @@ function getting_b_values(p::ModelParameters)
     elseif p.b_value == :prob
 
         b1 = p.b
-        b2 = rand(Distributions.Beta(1.5, 20)) #ba
-        b3 = rand(Distributions.Beta(2, 25)) #bh
-        b4 = rand(Distributions.Beta(1, 200)) #bl
-        b5 = isnothing(p.probrec) ? rand(Distributions.Beta(2, 20)) : p.probrec #be
-        return [b1; b3; b4; b2./2; b5]./10
+        b2 = round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
+        b3 = round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
+        b4 = round(rand(Distributions.Beta(1, 200)), digits = 5) #bl
+        b5 = isnothing(p.probrec) ? round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
+        return Float32.([b1; b3; b4; b2./2; b5]./10)
     else
         error("no strategy set for b values")
     end
@@ -831,7 +831,7 @@ export _get_betavalue
         x.nextday_meetcnt = 0
     end
    
-    x.contacts_vac = [0;0;0;0;0;0;0;0;0]
+    x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
 
     return cnt
 end
