@@ -5,7 +5,7 @@ using DataFrames
 using CSV
 using Query
 using Statistics
-#using ClusterManagers
+using ClusterManagers
 using Dates
 using DelimitedFiles
 
