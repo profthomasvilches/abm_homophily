@@ -983,7 +983,7 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
 
             aux = 0
 
-            if xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
+            if xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && x.swap == UNDEF
                 aux = 2
                 beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
             else
