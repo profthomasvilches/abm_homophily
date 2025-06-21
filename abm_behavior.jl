@@ -960,11 +960,11 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
             
             if x.vac_status == 0 # only gets to it if it is necessary
                     
-                if y.vac_status == 0 && y.vac_behavior != UNDEFV
-                    x.contacts_vac[Int(y.vac_behavior)+1] += 1
-                end
-    
-                if y.vac_status == 1
+                if y.vac_status == 0 
+                    if y.vac_behavior != UNDEFV
+                        x.contacts_vac[Int(y.vac_behavior)+1] += 1
+                    end
+                else
                     if y.wentto == 1
                         if  y.health_status == REC
                             x.contacts_vac[5] += 1
@@ -983,22 +983,22 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
 
             aux = 0
 
-            if xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && x.swap == UNDEF
+            if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
                 aux = 2
-                beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
+                beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
             else
-                beta = 0.0
+                beta = -1.0
             end
 
             if rand() < beta
                 
-                x.exp = x.tis   ## force the move to latent in the next time step.
-                x.sickfrom = y.health ## stores the infector's status to the infectee's sickfrom
-                x.sickby = x.sickby < 0 ? y.idx : x.sickby
-                x.swap = LAT
-                x.swap_status = LAT
-                x.daysinf = 0
-                x.dur = sample_epi_durations(x)
+                y.exp = y.tis   ## force the move to latent in the next time step.
+                y.sickfrom = x.health ## stores the infector's status to the infectee's sickfrom
+                y.sickby = y.sickby < 0 ? x.idx : y.sickby
+                y.swap = LAT
+                y.swap_status = LAT
+                y.daysinf = 0
+                y.dur = sample_epi_durations(y)
                 
 
             end  
