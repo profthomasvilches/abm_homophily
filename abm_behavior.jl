@@ -199,13 +199,13 @@ function main(ip::ModelParameters,sim::Int64)
         
         vac_number[st] = sum([x.vac_status for x in humans])
 
-        remaining_doses = vaccination(remaining_doses)
-        for x in humans
-    #        if x.iso && !(x.health_status in (HOS,ICU,DED)) # Taiye: Depends on whether we are considering HOS, ICU and DED.
-            if x.iso && !(x.health_status in (DED)) #&& !(x.health_status in (HOS,ICU,DED))
-                x.totaldaysiso += 1
-            end
-        end
+        remaining_doses = vaccination(remaining_doses, sim)
+        #     for x in humans
+        # #        if x.iso && !(x.health_status in (HOS,ICU,DED)) # Taiye: Depends on whether we are considering HOS, ICU and DED.
+        #         if x.iso && !(x.health_status in (DED)) #&& !(x.health_status in (HOS,ICU,DED))
+        #             x.totaldaysiso += 1
+        #         end
+        #     end
         _get_model_state(st, hmatrix) ## this datacollection needs to be at the start of the for loop
         _get_model_state2(st, vmatrix) ## this datacollection needs to be at the start of the for loop
         dyntrans(st, grps,sim)
@@ -221,16 +221,17 @@ function main(ip::ModelParameters,sim::Int64)
 end
 export main
 
-function vaccination(remaining_doses::Int64)
+function vaccination(remaining_doses::Int64, sim::Int64)
     if p.vaccination_rate == 0
         return 0
     end
+    rng = MersenneTwister(1234*sim)
     # pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
     pos = findall(x -> x.vac_status == 0 && x.vac_behavior == PRO, humans)
 
     if length(pos) >= p.vaccination_rate+remaining_doses
 
-        pp = sample(pos,  p.vaccination_rate+remaining_doses, replace = false)
+        pp = sample(rng, pos,  p.vaccination_rate+remaining_doses, replace = false)
 
         for i in pp
             humans[i].vac_status = 1
@@ -822,8 +823,8 @@ export _get_betavalue
         x.nextday_meetcnt = cnt
     elseif !(x.health_status  in (DED))
         cnt = rand(negative_binomials_shelter(ag))  # expensive operation, try to optimize
-        x.nextday_meetcnt_w = 0
-        x.nextday_meetcnt = cnt
+        x.nextday_meetcnt = 0
+        x.nextday_meetcnt = 0
     end
     
 
@@ -873,10 +874,10 @@ function dyntrans(sys_time, grps,sim)
     for x in humans[pos]        
            
             xhealth = x.health
-            cnts = x.nextday_meetcnt
+            cnts = Int(x.nextday_meetcnt)
             cnts == 0 && continue # skip person if no contacts
             #general population contact
-            gpw = Int.(round.(cm[x.ag]*cnts))
+            gpw = Int.(round.(cm[x.ag].*cnts))
             
             #cnts = number of contacts on that day
 
