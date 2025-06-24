@@ -52,6 +52,18 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     #c1 = Symbol.((:LAT, :HOS, :ICU, :DED), :_INC)
     c2 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEFV), :_INC)
     c3 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEFV), :_PREV)
+    R0::Float64 = 0.0
+
+    if ip.calibrating 
+        c = :LAT_INC
+        udf = unstack(mydfs["all"], :time, :sim, c)
+        R0 = mean(sum(Matrix(udf[2:end, 2:end]), dims = 1))
+        println("###########################")
+        println("Calibrating: the R0 is $R0")
+        println("###########################")
+        return 0
+    end 
+
    for (k, df) in mydfs
 
         if k != "allv"
@@ -62,8 +74,10 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
                 udf = unstack(df, :time, :sim, c) 
                 fn = string("$(folderprefix)/simlevel_", lowercase(string(c)), "_", k, ".dat")
                 CSV.write(fn, udf)
+                
             end
             println("saving dataframe time level: $k")
+            
         else
             println("saving dataframe sim level: $k")
             # simulation level, save file per health status, per age group
@@ -84,10 +98,8 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     end
 
 
-    R01 = [cdr[i].R0 for i=1:nsims]
     vac_number = [cdr[i].vac_number for i=1:nsims]
    
-    writedlm(string(folderprefix,"/R01.dat"),R01)
     writedlm(string(folderprefix,"/vac_number.dat"),vac_number)
 
     return mydfs
@@ -98,11 +110,11 @@ end
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
     if isnothing(ip.probrec)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
-        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+        #RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+        RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     else
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
-        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+        #RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+        RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
     end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)
@@ -111,11 +123,11 @@ function create_folder_new(ip::cv.ModelParameters)
     return RF
 end
 
-function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, pops::Int64 = 10000, nsims::Int64 = 1000)
+function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, pops::Int64 = 10000, nsims::Int64 = 1000, calib::Bool = false, mt::Int64 = 200)
     
     @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), b = $bb, b_value=$(QuoteNode(scen)), file_index = $fidx,
     vaccination_rate = $vac_rate, popsize = $pops, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec,
-    groupinitial = $group_init)
+    groupinitial = $group_init, calibrating = $calib, modeltime = $mt)
     folder = create_folder_new(ip)
 
     run(ip,nsims,folder)

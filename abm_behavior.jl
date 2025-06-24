@@ -3,24 +3,9 @@ module abmbehavior
 using Base
 using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 # @enum HEALTH SUS LAT PRE ASYMP MILD MISO INF IISO HOS ICU REC DED UNDEF
-@enum HEALTH SUS LAT PRE ASYMP INF REC DED UNDEF # 
+@enum HEALTH SUS LAT PRE ASYMP INF REC DED LATC UNDEF # 
 @enum VACS PRO LIK HES ANT UNDEFV
 
-#TODO iniciar contatos em zeros 
-#!ok
-#TODO iniciar status vac_behavior
-#!ok
-#todo implement b for each individual
-#! ok
-#todo implement status behavior change
-#! ok
-#Todo implement contact to recovered (from symptomatic) people that were vaccinated.
-#! ok
-#todo implement vaccination
-#! ok
-#todo implement transmission reduction and symptoms based on vaccination
-#! ok
-#todo implement matrix for behavior
 
 Base.@kwdef mutable struct Human
     idx::Int64 = 0 
@@ -29,8 +14,6 @@ Base.@kwdef mutable struct Human
     vac_behavior::VACS = UNDEFV
     swap::HEALTH = UNDEF
     swap_status::HEALTH = UNDEF
-    sickfrom::HEALTH = UNDEF
-    sickby::Int64 = -1
     nextday_meetcnt::UInt8 = 0 ## how many contacts for a single day
     age::Int16   = 0    # in years. don't really need this but left it incase needed later
     ag::Int16   = 0
@@ -41,22 +24,16 @@ Base.@kwdef mutable struct Human
     iso::Bool = false  ## isolated (limited contacts)
     isovia::Symbol = :null ## isolated via quarantine (:qu), preiso (:pi), intervention measure (:im), or contact tracing (:ct)    
     contacts_vac::Vector{UInt8} = UInt8.([0;0;0;0;0;0;0;0]) # PRO NV; LIK; HES; ANTI; REC vac; DED vac; PRO VAC; VAC  
-    #comorbidity::Int8 = 0 ##does the individual has any comorbidity?
-    # Taiye: We are not considering comorbidities at this stage.
+    
+    first_inf::Bool = false
 
     vac_status::Int8 = 0 ##
     wentto::Int8 = 0
     incubationp::Int16 = 0
 
-    got_inf::Bool = false
     
-    # herd_im::Bool = false
-    # Taiye: We are not considering herd immunity at this stage.
-
     ag_new::Int16 = -1
     
-   
-    recovered::Bool = false 
     daysisolation::Int64 = 999 
     daysinf::Int64 = 999 
     isofalse::Bool = false
@@ -73,7 +50,7 @@ end
     seasonal::Bool = false ## seasonal betas or not
     popsize::Int64 = 100000
     prov::Symbol = :usa
-    calibration::Bool = false
+    calibrating::Bool = false
     start_several_inf::Bool = true
     modeltime::Int64 = 200
     initialinf::Int64 = 1
@@ -82,6 +59,7 @@ end
 
     fsevere::Float64 = 1.0 #
     frelasymp::Float64 = 0.26 ## relative transmission of asymptomatic
+    frelinf::Float64 = 0.89 ## relative transmission of infected
     vaccine_eff::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccine_eff_symp::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccination_rate::Int64 = 10
@@ -114,9 +92,6 @@ function runsim(simnum, ip::ModelParameters)
     # function runs the `main` function, and collects the data as dataframes. 
     hmatrix, vmatrix, hh1,vac_number = main(ip,simnum)            
 
-    #Get the R0
-    
-    R01 = length(findall(k -> k.sickby in hh1,humans))/length(hh1)
     
     ###use here to create the vector of comorbidity
     # get simulation age groups
@@ -142,7 +117,7 @@ function runsim(simnum, ip::ModelParameters)
     #insertcols!(ag6, 1, :sim => simnum); insertcols!(ag7, 1, :sim => simnum);
     
 
-    pos = findall(y-> y in (11,22,33),hmatrix[:,end])
+    pos = findall(y-> y == Int(DED),hmatrix[:,end])
 
     vector_ded::Vector{Int64} = zeros(Int64,100)
 
@@ -152,7 +127,7 @@ function runsim(simnum, ip::ModelParameters)
     end
 
     return (a=all1, allv = allv, #g1=ag1, g2=ag2, g3=ag3, g4=ag4, g5=ag5,g6=ag6,g7=ag7,
-    vector_dead=vector_ded, R0 = R01, vac_number = vac_number)
+    vector_dead=vector_ded, vac_number = vac_number)
 end
 export runsim
 
@@ -467,7 +442,7 @@ function insert_infected(health, num, ag)
         @inbounds for i in h 
             x = humans[i]
             x.dur = sample_epi_durations(x)
-            
+            x.first_inf = true
             if health == PRE
                 x.swap = health
                 x.swap_status = PRE
@@ -509,8 +484,6 @@ function insert_infected(health, num, ag)
                 error("can not insert human of health $(health)")
             end
             
-            
-            x.sickfrom = INF # this will add +1 to the INF count in _count_infectors()... keeps the logic simple in that function.    
             
         end
     end    
@@ -671,22 +644,27 @@ function move_to_latent(x::Human)
     age_thres = [4, 19, 49, 64, 79, 999]
     g = findfirst(y-> y >= x.age, age_thres)
 
- 
-    if rand() < (symp_pcts[g])*(1-p.vaccine_eff_symp)^x.vac_status
-       
-        x.swap = PRE
-        x.swap_status = PRE
-        x.wentto = 1
+    if !p.calibrating || x.first_inf
+        if rand() < (symp_pcts[g])*(1-p.vaccine_eff_symp)^x.vac_status
         
+            x.swap = PRE
+            x.swap_status = PRE
+            x.wentto = 1
+            
+        else
+            x.swap = ASYMP
+            x.swap_status = ASYMP
+            x.wentto = 2
+            
+        end
     else
-        x.swap = ASYMP
-        x.swap_status = ASYMP
-        x.wentto = 2
-        
+        ## in calibration mode, latent people never become infectious.
+        x.swap = UNDEF
+        x.swap_status = UNDEF
+        x.wentto = 0
+        x.exp = 9999
     end
     
-    x.got_inf = true
-    ## in calibration mode, latent people never become infectious.
     
 end
 export move_to_latent
@@ -776,7 +754,6 @@ function move_to_recovered(h::Human)
     h.health = h.swap
     h.health_status = h.swap_status
     
-    h.recovered = true
 
     h.swap = UNDEF
     h.swap_status = UNDEF
@@ -787,7 +764,6 @@ function move_to_recovered(h::Human)
    
     #h.daysinf = 999
 
-    h.got_inf = false 
     
     # isolation property has no effect in contact dynamics anyways (unless x == SUS)
 end
@@ -954,6 +930,9 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
     for (i, g) in enumerate(gpw) 
         meet = return_contacts(x, grp_sample[i], g, Pj[i])#rand(grp_sample[i], g)   # sample the people from each group
         # go through edach person
+        # SUS LAT PRE ASYMP INF REC DED
+        vector_contacts::Vector{Int64} = zeros(Int64, 8)
+
         for j in meet 
             y = humans[j]
 
@@ -982,26 +961,28 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
 
 
             aux = 0
-
-            if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
-                aux = 2
-                beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
+            vector_contacts[Int(y.health)+1] += 1
             
-                if rand() < beta
-                    
-                    y.exp = y.tis   ## force the move to latent in the next time step.
-                    y.sickfrom = x.health ## stores the infector's status to the infectee's sickfrom
-                    y.sickby = y.sickby < 0 ? x.idx : y.sickby
-                    y.swap = LAT
-                    y.swap_status = LAT
-                    y.daysinf = 0
-                    y.dur = sample_epi_durations(y)
-                    
-
-                end  
-            end
 
         end
+
+        # SUS LAT PRE ASYMP INF REC DED
+        if xhealth == SUS && x.swap == UNDEF
+                aux = 2
+                #_get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
+                beta1 = (1-(p.β*p.frelasymp*(1-p.vaccine_eff)^x.vac_status))^vector_contacts[4] # probability scaping infection from asymp
+                beta2 = (1-(p.β*p.frelinf*(1-p.vaccine_eff)^x.vac_status))^vector_contacts[5] # probability scaping infection from inf
+                beta3 = (1-(p.β*(1-p.vaccine_eff)^x.vac_status))^vector_contacts[3] # probability scaping infection from inf
+            
+                if rand() < (1-beta1*beta2*beta3) # probability of at least one transmission
+                    
+                    x.exp = x.tis   ## force the move to latent in the next time step.
+                    x.swap = LAT
+                    x.swap_status = LAT
+                    x.daysinf = 0
+                    x.dur = sample_epi_durations(x)
+                end  
+            end
     end  
 
 end
