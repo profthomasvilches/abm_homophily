@@ -957,7 +957,6 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
         for j in meet 
             y = humans[j]
 
-        
             
             if x.vac_status == 0 # only gets to it if it is necessary
                     
@@ -987,22 +986,21 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
             if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
                 aux = 2
                 beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
-            else
-                beta = -1.0
+            
+                if rand() < beta
+                    
+                    y.exp = y.tis   ## force the move to latent in the next time step.
+                    y.sickfrom = x.health ## stores the infector's status to the infectee's sickfrom
+                    y.sickby = y.sickby < 0 ? x.idx : y.sickby
+                    y.swap = LAT
+                    y.swap_status = LAT
+                    y.daysinf = 0
+                    y.dur = sample_epi_durations(y)
+                    
+
+                end  
             end
 
-            if rand() < beta
-                
-                y.exp = y.tis   ## force the move to latent in the next time step.
-                y.sickfrom = x.health ## stores the infector's status to the infectee's sickfrom
-                y.sickby = y.sickby < 0 ? x.idx : y.sickby
-                y.swap = LAT
-                y.swap_status = LAT
-                y.daysinf = 0
-                y.dur = sample_epi_durations(y)
-                
-
-            end  
         end
     end  
 
