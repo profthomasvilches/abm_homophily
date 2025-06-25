@@ -980,12 +980,12 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
                             y.contacts_vac[6] += 1
                         end
                     end
-                    if x.vac_status == PRO
+                    if x.vac_behavior == PRO
                         y.contacts_vac[7] += 1
                     end
                     y.contacts_vac[8] += 1
     
-                elseif y.vac_status == 1
+                elseif y.vac_behavior == 1
                     if y.wentto == 1
                         if  y.health_status == REC
                             x.contacts_vac[5] += 1
@@ -993,7 +993,7 @@ function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
                             x.contacts_vac[6] += 1
                         end
                     end
-                    if y.vac_status == PRO
+                    if y.vac_behavior == PRO
                         x.contacts_vac[7] += 1
                     end
                     x.contacts_vac[8] += 1
