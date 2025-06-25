@@ -82,8 +82,11 @@ const popsize = 3000
 const humans = Array{Human}(undef, popsize) 
 const p = ModelParameters()  ## setup default parameters
 const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
+const v_basis = @StaticArrays [PRO, LIK, HES, ANT]
+const pos_s = collect(1:popsize)
+const behaviors = falses(popsize)
 
-export ModelParameters, HEALTH, VACS, Human, humans, BETAS
+export popsize, ModelParameters, HEALTH, VACS, Human, humans, BETAS, v_basis, pos_s
 
 function runsim(simnum, ip::ModelParameters)
     GC.gc()
@@ -203,24 +206,14 @@ function vaccination(remaining_doses::Int64, sim::Int64)
     end
     rng = MersenneTwister(1234*sim)
     # pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
-    pos = findall(x -> x.vac_status == 0 && x.vac_behavior == PRO, humans)
+    pos = Iterators.take(shuffle(rng, findall(x -> x, behaviors)), p.vaccination_rate+remaining_doses)
 
-    if length(pos) >= p.vaccination_rate+remaining_doses
-
-        pp = sample(rng, pos,  p.vaccination_rate+remaining_doses, replace = false)
-
-        for i in pp
-            humans[i].vac_status = 1
-        end
-        remaining_doses = 0
-    else
-        
-        for i in pos
-            humans[i].vac_status = 1
-        end
-
-        remaining_doses = p.vaccination_rate+remaining_doses-length(pos)
+    for i in pos
+        humans[i].vac_status = 1
+        behaviors[i] = false
     end
+    #remaining_doses = max(0, p.vaccination_rate+remaining_doses-length(pos))
+    
     return 0#remaining_doses
 end
 
@@ -397,7 +390,7 @@ function initialize()
         
         if x.age >= 0
             g = findfirst(y->x.age ∈ y, age_break_behav)
-            x.vac_behavior = sample([PRO; LIK; HES; ANT], Weights(prob_behav[g]))
+            x.vac_behavior = sample(v_basis, Weights(prob_behav[g]))
         end
         x.exp = 999  ## susceptible people don't expire.
         x.betas_vac = getting_b_values(p)
@@ -436,8 +429,7 @@ function insert_infected(health, num, ag)
     if isnothing(p.groupinitial)
         l = findall(x -> x.health == SUS && x.ag == ag, humans)
     else
-        v = [PRO; LIK; HES; ANT]
-        l = findall(x -> x.health == SUS && x.vac_behavior == v[p.groupinitial] && x.ag == ag, humans)
+        l = findall(x -> x.health == SUS && x.vac_behavior == v_basis[p.groupinitial] && x.ag == ag, humans)
     end
     if length(l) > 0 && num < length(l)
         h = sample(l, num; replace = false)
@@ -504,18 +496,22 @@ function time_update()
          
         x.daysinf += 1
         
-        #TODO add behavioral change here
         if x.tis >= x.exp             
-            @match Symbol(x.swap_status) begin
-                :LAT  => begin 
-                    move_to_latent(x); 
-                end
-                :PRE  => begin move_to_pre(x); end
-                :ASYMP => begin move_to_asymp(x);  end
-                :INF  => begin move_to_inf(x); end    
-                :REC  => begin move_to_recovered(x); end
-                :DED  => begin move_to_dead(x); end
-                _    => begin dump(x); error("swap expired, but no swap set."); end
+            if x.swap_status == LAT
+                move_to_latent(x)
+            elseif x.swap_status == PRE
+                move_to_pre(x)
+            elseif x.swap_status == ASYMP
+                move_to_asymp(x)
+            elseif x.swap_status == INF
+                move_to_inf(x)
+            elseif x.swap_status == REC
+                move_to_recovered(x)
+            elseif x.swap_status == DED
+                move_to_dead(x)
+            else
+                dump(x)
+                error("swap expired, but no swap set.")
             end
         end
 
@@ -529,7 +525,7 @@ function time_update()
 end
 export time_update
 
-function update_behavior(x)
+function update_behavior(x::Human)
 
     #? create a vector of Pv, Pa...
     #? 
@@ -554,6 +550,7 @@ function update_behavior(x)
         if rand() < (1-prob1)/((1-prob1)+(1-prob2*prob3))
             if rand() < 1-prob1 #? Is the individual changing?
                 x.vac_behavior = PRO
+                behaviors[x.idx] = true
             end
         else
             if rand() < 1-prob2*prob3
@@ -785,25 +782,26 @@ end
 
 function calculate_H(gp)
     
-    status = [PRO; LIK; HES; ANT]
-    
-    vector = [humans[i].vac_behavior for i in gp]
-    
-    
     # how many times it appears
-    contagens = countmap(vector)
+    contagens = countmap([humans[i].vac_behavior for i in gp])
 
-    contagem_vetor = [get(contagens, i, 0) for i in status]
+    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
     # probabilities based on homophily
     
-    Pj = zeros(Float64, length(status), length(status))
+    Pj = zeros(Float64, length(v_basis), length(v_basis))
     if sum(contagem_vetor) > 0
-        for br in status
-            H = p.h .* Int.(br .== status)+(1-p.h) .* contagem_vetor./sum(contagem_vetor)
+        for br in v_basis
+            H = p.h .* Int.(br .== v_basis)+(1-p.h) .* contagem_vetor./sum(contagem_vetor)
             Pj[Int(br)+1,:] = H ./ sum(H)
         end
     end
     return Pj
+end
+
+function get_age_behav(grpi)
+    vector = Iterators.take([humans(i).vac_behavior for i in grpi], length(grpi))
+    aa = [findall(y -> y == v_basis[i], collect(vector)) for i in eachindex(v_basis)]
+    return map(x-> grpi[x], aa)
 end
 
 function dyntrans(sys_time, grps,sim)
@@ -814,10 +812,14 @@ function dyntrans(sys_time, grps,sim)
 
     Pj = map(x->calculate_H(x), grps)
 
-    pos = shuffle(1:length(humans))
+    shuffle!(pos_s)
+    #todo create a vector of vectors: each age group with their respective behaviors
+    #? this should improve performance
+    
+    Bj = map(x-> get_age_behav(x), grps)
 
     # go through every infectious person
-    for i in pos    
+    for i in pos_s    
             x = humans[i] 
             xhealth = x.health
             cnts = Int(x.nextday_meetcnt)
@@ -826,76 +828,51 @@ function dyntrans(sys_time, grps,sim)
             gpw = Int.(round.(cm[x.ag].*cnts))
             
             #cnts = number of contacts on that day
-
             
+
             perform_contacts(x,gpw,grps,xhealth, Pj)
     end
     #return totalmet, totalinf
 end
 export dyntrans
 
-function return_contacts(x, gp, g, Pj)
+function return_contacts(x::Human, gp1::Vector{Int64}, g::Int64, Pj::Matrix{Float64})
 
-    gp = [i for i in gp if i != x.idx]
+    gp = [i for i in gp1 if i != x.idx]
 
     if g == 0
-        aux = []
+        aux = Vector{Int}(undef, 0)
         return aux
-    end
-
-    if x.vac_behavior == UNDEFV
-        # if the individual does not require behavior, we sample it from uniform
-        aux1 = sample(gp, g)
-        return aux1
-    end
-
-
-    status = [PRO; LIK; HES; ANT]
-    
-    vector = [humans[i].vac_behavior for i in gp if i != x.idx]
-
-    if any(vector .== UNDEFV)
-
-        pos = findall(y-> humans[y].vac_behavior == UNDEFV && y != x.idx, gp)
-
-        g1 = Int(round(g*length(pos)/length(gp)))
-
-        aux1 = sample(pos, g1)
-        g = g-g1
-
-        if g == 0
-            return gp[aux1]
-        end
-    else
-        aux1 = []
     end
 
     Pjj = Pj[Int(x.vac_behavior)+1, :]
     # sampling the groups based on H
     gr = sample(1:length(Pjj), Weights(Pjj), g, replace = true)
     
-    vector2 = [status[i] for i in gr]
+    vector2 = [v_basis[i] for i in gr]
     
+    
+    vector = [humans[i].vac_behavior for i in gp if i != x.idx]
+
     # counting the number of contact in each group
     contagens = countmap(vector2)
-    contagem_vetor = [get(contagens, i, 0) for i in status]
-    aa = [findall(y -> y == status[i], vector) for i in eachindex(contagem_vetor)]
-    aux = repeat([[]], length(aa))
+    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
+    aa = [findall(y -> y == v_basis[i], vector) for i in eachindex(contagem_vetor)]
+    aux = [Int[] for _ in eachindex(aa)]
     for i in eachindex(contagem_vetor)
         if length(aa[i]) > 0
             aux[i] = sample(aa[i], contagem_vetor[i], replace = true)
         end
     end
 
-    aux = vcat(aux...)
+    aux = reduce(vcat, aux)
 
-    aux = [aux;aux1]
 
     return gp[aux]
 
 end
 
-function perform_contacts(x,gpw,grp_sample,xhealth, Pj)
+function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{Int64}},xhealth::HEALTH, Pj::Vector{Matrix{Float64}})
 
     for (i, g) in enumerate(gpw) 
         meet = return_contacts(x, grp_sample[i], g, Pj[i])#rand(grp_sample[i], g)   # sample the people from each group
