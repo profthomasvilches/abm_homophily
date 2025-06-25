@@ -9,7 +9,7 @@ using ClusterManagers
 using Dates
 using DelimitedFiles
 
-#NV["JULIA_WORKER_TIMEOUT"] = "180"
+ENV["JULIA_WORKER_TIMEOUT"] = "600"
 
 addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
 #addprocs(10)
@@ -22,11 +22,10 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     println("starting $nsims simulations...\nsave folder set to $(folderprefix)")
     dump(myp)
         
-    sucesso = try
-        cdr = pmap(1:nsims) do x                 
+    cdr = try
+        pmap(1:nsims) do x                 
             cv.runsim(x, myp)
-        end   
-        true
+        end  
     catch e
         open("erro.txt", "a") do io
             println(io, "==== ERRO no pmap ====")
@@ -37,10 +36,10 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
             showerror(io, e, catch_backtrace())
             println(io, "\n")
         end
-        false
+        nothing
     end
     
-    if !sucesso
+    if isnothing(cdr)
         error("Processo morto")
     end
 
