@@ -5,26 +5,29 @@ using DataFrames
 using CSV
 using Query
 using Statistics
-using ClusterManagers
+#using ClusterManagers
 using Dates
 using DelimitedFiles
 
-ENV["JULIA_WORKER_TIMEOUT"] = "600"
+#ENV["JULIA_WORKER_TIMEOUT"] = "600"
 
-addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
-#addprocs(10)
+#addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
+addprocs(10)
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
 @everywhere const cv=abmbehavior
 
 
 function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
+    
     println("starting $nsims simulations...\nsave folder set to $(folderprefix)")
     dump(myp)
         
     cdr = try
         pmap(1:nsims) do x                 
-            cv.runsim(x, myp)
+            result = cv.runsim(x, myp)
+            GC.gc()
+            return result
         end  
     catch e
         open("erro.txt", "a") do io
@@ -129,7 +132,7 @@ function create_folder_new(ip::cv.ModelParameters)
 end
 
 function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, pops::Int64 = 10000, nsims::Int64 = 1000)
-    
+     GC.gc()
     @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), b = $bb, b_value=$(QuoteNode(scen)), file_index = $fidx,
     vaccination_rate = $vac_rate, popsize = $pops, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec,
     groupinitial = $group_init)

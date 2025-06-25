@@ -2,25 +2,9 @@ module abmbehavior
 
 using Base
 using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
-# @enum HEALTH SUS LAT PRE ASYMP MILD MISO INF IISO HOS ICU REC DED UNDEF
 @enum HEALTH SUS LAT PRE ASYMP INF REC DED UNDEF # 
 @enum VACS PRO LIK HES ANT UNDEFV
 
-#TODO iniciar contatos em zeros 
-#!ok
-#TODO iniciar status vac_behavior
-#!ok
-#todo implement b for each individual
-#! ok
-#todo implement status behavior change
-#! ok
-#Todo implement contact to recovered (from symptomatic) people that were vaccinated.
-#! ok
-#todo implement vaccination
-#! ok
-#todo implement transmission reduction and symptoms based on vaccination
-#! ok
-#todo implement matrix for behavior
 
 Base.@kwdef mutable struct Human
     idx::Int64 = 0 
@@ -48,11 +32,6 @@ Base.@kwdef mutable struct Human
     wentto::Int8 = 0
     incubationp::Int16 = 0
 
-    got_inf::Bool = false
-    
-    # herd_im::Bool = false
-    # Taiye: We are not considering herd immunity at this stage.
-
     ag_new::Int16 = -1
     
    
@@ -77,17 +56,13 @@ end
     start_several_inf::Bool = true
     modeltime::Int64 = 200
     initialinf::Int64 = 1
-    fmild::Float64 = 0.5  ## percent of people practice self-isolation
-    # Taiye: Could be useful later for keeping track of the population in isolation.
-
+   
     fsevere::Float64 = 1.0 #
     frelasymp::Float64 = 0.26 ## relative transmission of asymptomatic
     vaccine_eff::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccine_eff_symp::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccination_rate::Int64 = 10
-    # herd::Int8 = 0 #typemax(Int32) ~ millions
-    # Taiye: We are not considering herd immunity at this stage.
-
+    
     file_index::Int16 = 0
     α::Float64 = 1.0
     b_value::Symbol = :prob
@@ -103,20 +78,21 @@ Base.show(io::IO, ::MIME"text/plain", z::Human) = dump(z)
 
 include("matrices.jl")
 ## constants 
-const humans = Array{Human}(undef, 0) 
+const popsize = 3000
+const humans = Array{Human}(undef, popsize) 
 const p = ModelParameters()  ## setup default parameters
 const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
-#const agebraks_vac = @SVector [0:0,1:4,5:14,15:24,25:44,45:64,65:74,75:100]
 
 export ModelParameters, HEALTH, VACS, Human, humans, BETAS
 
 function runsim(simnum, ip::ModelParameters)
+    GC.gc()
     # function runs the `main` function, and collects the data as dataframes. 
     hmatrix, vmatrix, hh1,vac_number = main(ip,simnum)            
 
     #Get the R0
     
-    R01 = length(findall(k -> k.sickby in hh1,humans))/length(hh1)
+    R01 = length(findall(k -> k.sickby in hh1, humans))/length(hh1)
     
     ###use here to create the vector of comorbidity
     # get simulation age groups
@@ -164,10 +140,10 @@ function main(ip::ModelParameters,sim::Int64)
     # reset the parameters for the simulation scenario
     reset_params(ip)  #logic: outside "ip" parameters are copied to internal "p" which is a global const and available everywhere. 
 
-    p.popsize == 0 && error("no population size given")
+    popsize == 0 && error("no population size given")
     
-    hmatrix = zeros(Int16, p.popsize, p.modeltime)
-    vmatrix = zeros(Int16, p.popsize, p.modeltime)
+    hmatrix = zeros(Int16, popsize, p.modeltime)
+    vmatrix = zeros(Int16, popsize, p.modeltime)
     initialize() # initialize population
     
     #h_init::Int64 = 0
@@ -265,7 +241,8 @@ function reset_params(ip::ModelParameters)
     #init_betas()
 
     # resize the human array to change population size
-    resize!(humans, p.popsize)
+    #resize!(humans, popsize)
+    
 end
 export reset_params, reset_params_default
 
@@ -405,7 +382,7 @@ function initialize()
     prob_behav = [[0.271;0.241;0.303;0.084],[0.38;0.214;0.205;0.088],[0.271;0.241;0.303;0.084],[0.322;0.302;0.223;0.053],[0.471;0.288;0.131;0.04]]
     a = [4;19;49;64;79;999]
      
-    for i = 1:p.popsize 
+    for i = 1:popsize 
         humans[i] = Human()              ## create an empty human       
         x = humans[i]
         x.idx = i 
@@ -618,28 +595,6 @@ function update_behavior(x)
     
 end
 
-#@inline _set_isolation(x::Human, iso) = _set_isolation(x, iso, x.isovia)
-@inline function _set_isolation(x::Human, iso, via)
-    # a helper setter function to not overwrite the isovia property. 
-    # a person could be isolated in susceptible/latent phase through contact tracing
-    # --> in which case it will follow through the natural history of disease 
-    # --> if the person remains susceptible, then iso = off
-    # a person could be isolated in presymptomatic phase through fpreiso
-    # --> if x.iso == true from CT and x.isovia == :ct, do not overwrite
-    # a person could be isolated in mild/severe phase through fmild, fsevere
-    # --> if x.iso == true from CT and x.isovia == :ct, do not overwrite
-    # --> if x.iso == true from PRE and x.isovia == :pi, do not overwrite
-    if x.isovia == :null || via == :sev
-        x.iso = iso 
-        x.isovia = via
-        x.daysisolation = 0
-        x.days_after_detection = 0
-    elseif !iso
-        x.iso = iso 
-        x.isovia = via
-    end
-
-end
 function sample_epi_durations(y::Human)
     # when a person is sick, samples the 
 
@@ -685,7 +640,6 @@ function move_to_latent(x::Human)
         
     end
     
-    x.got_inf = true
     ## in calibration mode, latent people never become infectious.
     
 end
@@ -766,10 +720,6 @@ function move_to_dead(h::Human)
     h.swap_status = UNDEF
     h.tis = 0 
     h.exp = 999 ## stay recovered indefinitely
-
-   # h.iso = true # a dead person is isolated
-   # _set_isolation(h, true)  # do not set the isovia property here.  
-    # isolation property has no effect in contact dynamics anyways (unless x == SUS)
 end
 
 function move_to_recovered(h::Human)
@@ -784,10 +734,6 @@ function move_to_recovered(h::Human)
     h.exp = 999 ## stay recovered indefinitely
 
     #h.iso = false ## a recovered person has ability to meet others
-   
-    #h.daysinf = 999
-
-    h.got_inf = false 
     
     # isolation property has no effect in contact dynamics anyways (unless x == SUS)
 end
@@ -871,8 +817,8 @@ function dyntrans(sys_time, grps,sim)
     pos = shuffle(1:length(humans))
 
     # go through every infectious person
-    for x in humans[pos]        
-           
+    for i in pos    
+            x = humans[i] 
             xhealth = x.health
             cnts = Int(x.nextday_meetcnt)
             cnts == 0 && continue # skip person if no contacts
