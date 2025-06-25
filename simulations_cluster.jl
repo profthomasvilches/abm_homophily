@@ -5,14 +5,14 @@ using DataFrames
 using CSV
 using Query
 using Statistics
-#using ClusterManagers
+using ClusterManagers
 using Dates
 using DelimitedFiles
 
-#ENV["JULIA_WORKER_TIMEOUT"] = "180"
+#NV["JULIA_WORKER_TIMEOUT"] = "180"
 
-#addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
-addprocs(10)
+addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
+#addprocs(10)
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
 @everywhere const cv=abmbehavior
