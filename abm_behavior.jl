@@ -82,7 +82,7 @@ const popsize = 3000
 const humans = Array{Human}(undef, popsize) 
 const p = ModelParameters()  ## setup default parameters
 const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
-const v_basis = @StaticArrays [PRO, LIK, HES, ANT]
+const v_basis = @SVector [PRO, LIK, HES, ANT]
 const pos_s = collect(1:popsize)
 const behaviors = falses(popsize)
 
@@ -799,7 +799,7 @@ function calculate_H(gp)
 end
 
 function get_age_behav(grpi)
-    vector = Iterators.take([humans(i).vac_behavior for i in grpi], length(grpi))
+    vector = Iterators.take([humans[i].vac_behavior for i in grpi], length(grpi))
     aa = [findall(y -> y == v_basis[i], collect(vector)) for i in eachindex(v_basis)]
     return map(x-> grpi[x], aa)
 end
@@ -830,52 +830,48 @@ function dyntrans(sys_time, grps,sim)
             #cnts = number of contacts on that day
             
 
-            perform_contacts(x,gpw,grps,xhealth, Pj)
+            perform_contacts(x,gpw,grps,xhealth, Pj, Bj)
     end
     #return totalmet, totalinf
 end
 export dyntrans
 
-function return_contacts(x::Human, gp1::Vector{Int64}, g::Int64, Pj::Matrix{Float64})
+function return_contacts(x::Human, g::Int64, Pji::Matrix{Float64}, Bji::Vector{Vector{Int64}})
 
-    gp = [i for i in gp1 if i != x.idx]
 
     if g == 0
         aux = Vector{Int}(undef, 0)
         return aux
     end
 
-    Pjj = Pj[Int(x.vac_behavior)+1, :]
+    Pjj = Pji[Int(x.vac_behavior)+1, :]
     # sampling the groups based on H
     gr = sample(1:length(Pjj), Weights(Pjj), g, replace = true)
     
     vector2 = [v_basis[i] for i in gr]
     
-    
-    vector = [humans[i].vac_behavior for i in gp if i != x.idx]
-
     # counting the number of contact in each group
     contagens = countmap(vector2)
     contagem_vetor = [get(contagens, i, 0) for i in v_basis]
-    aa = [findall(y -> y == v_basis[i], vector) for i in eachindex(contagem_vetor)]
-    aux = [Int[] for _ in eachindex(aa)]
+    
+    aux = [Int[] for _ in eachindex(Bji)]
     for i in eachindex(contagem_vetor)
-        if length(aa[i]) > 0
-            aux[i] = sample(aa[i], contagem_vetor[i], replace = true)
+        if length(Bji[i]) > 0
+            aux[i] = sample(Bji[i], contagem_vetor[i], replace = true)
         end
     end
 
     aux = reduce(vcat, aux)
 
 
-    return gp[aux]
+    return aux#gp[aux]
 
 end
 
-function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{Int64}},xhealth::HEALTH, Pj::Vector{Matrix{Float64}})
+function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{Int64}},xhealth::HEALTH, Pj::Vector{Matrix{Float64}}, Bj::Vector{SizedVector{4, Vector{Int64}, Vector{Vector{Int64}}}})
 
     for (i, g) in enumerate(gpw) 
-        meet = return_contacts(x, grp_sample[i], g, Pj[i])#rand(grp_sample[i], g)   # sample the people from each group
+        meet = return_contacts(x, g, Pj[i], Vector(Bj[i]))#rand(grp_sample[i], g)   # sample the people from each group
         # go through edach person
         for j in meet 
             y = humans[j]
