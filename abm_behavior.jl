@@ -487,8 +487,27 @@ function insert_infected(health, num, ag)
 end
 export insert_infected
 
+function get_alphas()
+    αv = p.κ*rand(Distributions.Beta(2,3))
+    αsv = p.κ*rand(Distributions.Beta(3,4))
+    αsl = p.κ*rand(Distributions.Beta(3,3))
+    αsh = p.κ*rand(Distributions.Beta(4,3))
+    αsa = p.κ*rand(Distributions.Beta(3,2))
+    αrv = p.κ*rand(Distributions.Beta(3,2))
+
+    return αv, αsv, αsl, αsh, αsa, αrv
+end
+
 function time_update()
     # counters to calculate incidence
+    αv, αsv, αsl, αsh, αsa = get_alphas()
+    contagens = countmap([x.vac_status for x in humans])
+    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
+    
+    ninfvac = length(findall(x -> x.vac_status == 1 && x.wentto == 1, humans))
+    nvac = length(findall(x -> x.vac_status == 1, humans))
+    contagem_vetor = [contagem_vetor; ninfvac]
+    contagem_vetor[1] = contagem_vetor[1]-nvac
 
     for x in humans 
         x.tis += 1 
@@ -516,7 +535,7 @@ function time_update()
         end
 
         # behavioral change
-        update_behavior(x)
+        update_behavior(x, [αv, αsv, αsl, αsh, αsa, αrv], contagem_vetor)
 
         get_nextday_counts(x)
         
@@ -525,22 +544,24 @@ function time_update()
 end
 export time_update
 
-function update_behavior(x::Human)
+function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64})
 
     #? create a vector of Pv, Pa...
     #? 
+    αv, αsv, αsl, αsh, αsa, αrv = alphas
+    V, Sv, L, H, A, Rv = ninds
 
     if x.vac_behavior == LIK
         # probability of getting PRO
-        n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1]
+        n1 = (αv*V+αsv*Sv)/popsize
         prob1 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
 
         # probability of getting hesitant
-        n2 = x.contacts_vac[3]+x.contacts_vac[4]
+        n2 = (αsh*H+αsa*A)/popsize
         prob2 = (1-x.betas_vac[2])^n2
 
         # probability related to vaccinated and recovered
-        n3 = x.contacts_vac[5]
+        n3 = αrv*Rv/popsize
         prob3 = (1-x.betas_vac[5])^n3
         #? go to pro or Hes
         #? 1-prob1*prob2*prob3
@@ -559,12 +580,12 @@ function update_behavior(x::Human)
             end
         end
     elseif x.vac_behavior == HES
-          # probability of getting PRO
-          n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1] 
+          # probability of getting LIK
+          n1 = (αsl*L+αsv*Sv+αv*V)/popsize 
           prob1 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
   
           # probability of getting anti
-          n2 = x.contacts_vac[4]
+          n2 = αsa*A/popsize
           prob2 = (1-x.betas_vac[4])^n2
   
   
@@ -579,13 +600,25 @@ function update_behavior(x::Human)
         end 
     elseif x.vac_behavior == ANT
         # probability of getting likely
-        n1 = x.contacts_vac[8] # number of vaccinated in contact
+        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
         prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
 
 
         if rand() < 1-prob1 # probability of getting at least one of the changes
             
             x.vac_behavior = HES
+            
+        end
+    elseif x.vac_behavior == PRO && x.vac_status == 0
+        # probability of getting likely
+        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
+        prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
+
+
+        if rand() < 1-prob1 # probability of getting at least one of the changes
+            
+            x.vac_behavior = LIK
+            behaviors[x.idx] = false
             
         end
     end
@@ -820,15 +853,15 @@ function dyntrans(sys_time, grps,sim)
     for i in pos_s    
             x = humans[i] 
             xhealth = x.health
-            cnts = Int(x.nextday_meetcnt)
-            cnts == 0 && continue # skip person if no contacts
-            #general population contact
-            gpw = Int.(round.(cm[x.ag].*cnts))
-            
-            #cnts = number of contacts on that day
-            
+            if xhealth ∈ (PRE, INF, ASYMP)
+                
+                cnts = Int(x.nextday_meetcnt)
+                cnts == 0 && continue # skip person if no contacts
+                #general population contact
+                gpw = Int.(round.(cm[x.ag].*cnts))
 
-            perform_contacts(x,gpw,grps,xhealth, Pj, Bj)
+                perform_contacts(x,gpw,grps,xhealth, Pj, Bj)
+            end
     end
     #return totalmet, totalinf
 end
@@ -873,56 +906,10 @@ function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{
         # go through edach person
         for j in meet 
             y = humans[j]
-
-        
-            ycnt = y.nextday_meetcnt  
-            y.nextday_meetcnt = y.nextday_meetcnt - min(1,ycnt) # remove a contact
-
-            ycnt == 0 && continue
-            
-            if x.vac_status*y.vac_status == 0 # only gets to it if it is necessary
-                if x.vac_status == 0 && x.vac_behavior != UNDEFV
-                    y.contacts_vac[Int(x.vac_behavior)+1] += 1
-                end
-    
-                if y.vac_status == 0 && y.vac_behavior != UNDEFV
-                    x.contacts_vac[Int(y.vac_behavior)+1] += 1
-                end
-    
-                if x.vac_status == 1
-                    if x.wentto == 1
-                        if  x.health_status == REC
-                            y.contacts_vac[5] += 1
-                        elseif x.health_status == DED
-                            y.contacts_vac[6] += 1
-                        end
-                    end
-                    if x.vac_behavior == PRO
-                        y.contacts_vac[7] += 1
-                    end
-                    y.contacts_vac[8] += 1
-    
-                elseif y.vac_behavior == 1
-                    if y.wentto == 1
-                        if  y.health_status == REC
-                            x.contacts_vac[5] += 1
-                        elseif y.health_status == DED
-                            x.contacts_vac[6] += 1
-                        end
-                    end
-                    if y.vac_behavior == PRO
-                        x.contacts_vac[7] += 1
-                    end
-                    x.contacts_vac[8] += 1
-                end
-            end
             
 
-
-            aux = 0
-
-            if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
-                aux = 1
+            if y.health == SUS && y.swap == UNDEF
+                
                 beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
                 
                 if rand() < beta
@@ -933,18 +920,6 @@ function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{
                     y.swap_status = LAT
                     y.daysinf = 0
                     y.dur = sample_epi_durations(y)
-                end
-            elseif xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
-                aux = 2
-                beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
-                if rand() < beta
-                    x.exp = x.tis   ## force the move to latent in the next time step.
-                    x.sickfrom = y.health ## stores the infector's status to the infectee's sickfrom
-                    x.sickby = x.sickby < 0 ? y.idx : x.sickby
-                    x.swap = LAT
-                    x.swap_status = LAT
-                    x.daysinf = 0
-                    x.dur = sample_epi_durations(x)
                 end
             end
         end
