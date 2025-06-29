@@ -745,8 +745,6 @@ end
         bf = bf * p.frelasymp #0.11
     elseif xhealth == INF 
         bf = 0.89*bf
-    else
-        bf = 0.0
     end
 
     return bf
@@ -943,7 +941,7 @@ function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{
                     y.swap_status = LAT
                     y.daysinf = 0
                     y.dur = sample_epi_durations(y)
-                elseif aux == 2
+                else
                     x.exp = x.tis   ## force the move to latent in the next time step.
                     x.sickfrom = y.health ## stores the infector's status to the infectee's sickfrom
                     x.sickby = x.sickby < 0 ? y.idx : x.sickby
