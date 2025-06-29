@@ -188,7 +188,7 @@ function main(ip::ModelParameters,sim::Int64)
         _get_model_state(st, hmatrix) ## this datacollection needs to be at the start of the for loop
         _get_model_state2(st, vmatrix) ## this datacollection needs to be at the start of the for loop
         dyntrans(st, grps,sim)
-        sw = time_update() ###update the system
+        sw = time_update(vac_number[st]) ###update the system
         
         # end of day
     end
@@ -498,14 +498,14 @@ function get_alphas()
     return αv, αsv, αsl, αsh, αsa, αrv
 end
 
-function time_update()
+function time_update(nvac::Int64)
     # counters to calculate incidence
     αv, αsv, αsl, αsh, αsa = get_alphas()
     contagens = countmap([x.vac_status for x in humans])
     contagem_vetor = [get(contagens, i, 0) for i in v_basis]
     
     ninfvac = length(findall(x -> x.vac_status == 1 && x.wentto == 1, humans))
-    nvac = length(findall(x -> x.vac_status == 1, humans))
+    
     contagem_vetor = [contagem_vetor; ninfvac]
     contagem_vetor[1] = contagem_vetor[1]-nvac
 
@@ -790,16 +790,11 @@ export _get_betavalue
     cnt = 0
     ag = x.ag
     #if person is isolated, they can recieve only 3 maximum contacts
+
+    cnt = rand(negative_binomials(ag)) ##using the contact average for shelter-in
     
-    if !x.iso 
-        cnt = rand(negative_binomials(ag)) ##using the contact average for shelter-in
-        
-        x.nextday_meetcnt = cnt
-    elseif !(x.health_status  in (DED))
-        cnt = rand(negative_binomials_shelter(ag))  # expensive operation, try to optimize
-        x.nextday_meetcnt = 0
-        x.nextday_meetcnt = 0
-    end
+    x.nextday_meetcnt = cnt
+
     
 
     if x.health_status == DED
