@@ -50,7 +50,6 @@ end
     β = 0.0345  
     h::Float64 = 0.5     
     seasonal::Bool = false ## seasonal betas or not
-    popsize::Int64 = 100000
     prov::Symbol = :usa
     calibration::Bool = false
     start_several_inf::Bool = true
@@ -392,6 +391,7 @@ function initialize()
         if x.age >= 0
             g = findfirst(y->x.age ∈ y, age_break_behav)
             x.vac_behavior = sample(v_basis, Weights(prob_behav[g]))
+            behaviors[x.idx] = x.vac_behavior == PRO ? true : false
         end
         x.exp = 999  ## susceptible people don't expire.
         x.betas_vac = getting_b_values(p)
