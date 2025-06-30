@@ -71,6 +71,7 @@ end
     isolation_days::Int64 = 5
     probrec::Union{Nothing, Float64} = nothing
     groupinitial::Union{Nothing, Int8} = nothing
+    κ::Float64 = 2.0
 end
 
 
@@ -176,9 +177,9 @@ function main(ip::ModelParameters,sim::Int64)
     # start the time loop
     for st = 1:p.modeltime
         
-        vac_number[st] = sum([x.vac_status for x in humans])
-
+        
         remaining_doses = vaccination(remaining_doses, sim)
+        vac_number[st] = sum([x.vac_status for x in humans])
         #     for x in humans
         # #        if x.iso && !(x.health_status in (HOS,ICU,DED)) # Taiye: Depends on whether we are considering HOS, ICU and DED.
         #         if x.iso && !(x.health_status in (DED)) #&& !(x.health_status in (HOS,ICU,DED))
@@ -500,14 +501,14 @@ end
 
 function time_update(nvac::Int64)
     # counters to calculate incidence
-    αv, αsv, αsl, αsh, αsa = get_alphas()
-    contagens = countmap([x.vac_status for x in humans])
+    αv, αsv, αsl, αsh, αsa, αrv = get_alphas()
+    contagens = countmap([x.vac_behavior for x in humans])
     contagem_vetor = [get(contagens, i, 0) for i in v_basis]
     
     ninfvac = length(findall(x -> x.vac_status == 1 && x.wentto == 1, humans))
     
-    contagem_vetor = [contagem_vetor; ninfvac]
-    contagem_vetor[1] = contagem_vetor[1]-nvac
+    contagem_vetor = [nvac; contagem_vetor; ninfvac]
+    contagem_vetor[2] = contagem_vetor[2]-nvac
 
     for x in humans 
         x.tis += 1 
@@ -902,7 +903,6 @@ function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{
         for j in meet 
             y = humans[j]
             
-
             if y.health == SUS && y.swap == UNDEF
                 
                 beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
