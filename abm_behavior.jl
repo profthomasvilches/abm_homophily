@@ -25,9 +25,9 @@ Base.@kwdef mutable struct Human
     iso::Bool = false  ## isolated (limited contacts)
     isovia::Symbol = :null ## isolated via quarantine (:qu), preiso (:pi), intervention measure (:im), or contact tracing (:ct)    
     contacts_vac::Vector{UInt8} = UInt8.([0;0;0;0;0;0;0;0]) # PRO NV; LIK; HES; ANTI; REC vac; DED vac; PRO VAC; VAC  
+    connections::Vector{UInt32} = UInt32.([0])
     #comorbidity::Int8 = 0 ##does the individual has any comorbidity?
-    # Taiye: We are not considering comorbidities at this stage.
-
+    
     vac_status::Int8 = 0 ##
     wentto::Int8 = 0
     incubationp::Int16 = 0
@@ -159,6 +159,10 @@ function main(ip::ModelParameters,sim::Int64)
     # split population in agegroups 
     grps = get_ag_dist()
     
+    
+    Bj = map(x-> get_age_behav(x), grps)
+    Bj = map(x-> [Bj[j][x] for j in 1:length(Bj)], 1:length(v_basis))
+
     vac_number = zeros(Int64, p.modeltime)
     #insert one infected in the latent status in age group 4
     insert_infected(LAT, p.initialinf, 4)
@@ -170,6 +174,13 @@ function main(ip::ModelParameters,sim::Int64)
     #we need the workplaces to get the next days counts
     for x in humans
         get_nextday_counts(x)
+        cnts = Int(x.nextday_meetcnt)
+        cnts == 0 && continue # skip person if no contacts
+        #general population contact
+        gpw = Int.(round.(cm[x.ag].*cnts))
+         
+        x.connections = return_contacts(x, gpw, Vector(Bj[Int(x.vac_behavior)+1]))
+        
     end
     
     remaining_doses::Int64 = 0
@@ -396,6 +407,7 @@ function initialize()
         x.exp = 999  ## susceptible people don't expire.
         x.betas_vac = getting_b_values(p)
         #x.dur = sample_epi_durations() # sample epi periods   
+
     end
 end
 export initialize
@@ -500,15 +512,6 @@ function get_alphas()
 end
 
 function time_update(nvac::Int64)
-    # counters to calculate incidence
-    αv, αsv, αsl, αsh, αsa, αrv = get_alphas()
-    contagens = countmap([x.vac_behavior for x in humans])
-    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
-    
-    ninfvac = length(findall(x -> x.vac_status == 1 && x.wentto == 1, humans))
-    
-    contagem_vetor = [nvac; contagem_vetor; ninfvac]
-    contagem_vetor[2] = contagem_vetor[2]-nvac
 
     for x in humans 
         x.tis += 1 
@@ -536,33 +539,32 @@ function time_update(nvac::Int64)
         end
 
         # behavioral change
-        update_behavior(x, [αv, αsv, αsl, αsh, αsa, αrv], contagem_vetor)
+        update_behavior(x)
 
-        get_nextday_counts(x)
+        #get_nextday_counts(x)
         
     end
 
 end
 export time_update
 
-function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64})
+
+function update_behavior(x::Human)
 
     #? create a vector of Pv, Pa...
     #? 
-    αv, αsv, αsl, αsh, αsa, αrv = alphas
-    V, Sv, L, H, A, Rv = ninds
 
     if x.vac_behavior == LIK
         # probability of getting PRO
-        n1 = (αv*V+αsv*Sv)/popsize
+        n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1]
         prob1 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
 
         # probability of getting hesitant
-        n2 = (αsh*H+αsa*A)/popsize
+        n2 = x.contacts_vac[3]+x.contacts_vac[4]
         prob2 = (1-x.betas_vac[2])^n2
 
         # probability related to vaccinated and recovered
-        n3 = αrv*Rv/popsize
+        n3 = x.contacts_vac[5]
         prob3 = (1-x.betas_vac[5])^n3
         #? go to pro or Hes
         #? 1-prob1*prob2*prob3
@@ -581,12 +583,12 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
             end
         end
     elseif x.vac_behavior == HES
-          # probability of getting LIK
-          n1 = (αsl*L+αsv*Sv+αv*V)/popsize 
+          # probability of getting PRO
+          n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1] 
           prob1 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
   
           # probability of getting anti
-          n2 = αsa*A/popsize
+          n2 = x.contacts_vac[4]
           prob2 = (1-x.betas_vac[4])^n2
   
   
@@ -601,25 +603,13 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
         end 
     elseif x.vac_behavior == ANT
         # probability of getting likely
-        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
+        n1 = x.contacts_vac[8] # number of vaccinated in contact
         prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
 
 
         if rand() < 1-prob1 # probability of getting at least one of the changes
             
             x.vac_behavior = HES
-            
-        end
-    elseif x.vac_behavior == PRO && x.vac_status == 0
-        # probability of getting likely
-        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
-        prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
-
-
-        if rand() < 1-prob1 # probability of getting at least one of the changes
-            
-            x.vac_behavior = LIK
-            behaviors[x.idx] = false
             
         end
     end
@@ -802,7 +792,7 @@ export _get_betavalue
         x.nextday_meetcnt = 0
     end
    
-    x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
+    #x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
 
     return cnt
 end
@@ -837,87 +827,112 @@ function dyntrans(sys_time, grps,sim)
     ## find all the people infectious
     #rng = MersenneTwister(246*sys_time*sim)
 
-    Pj = map(x->calculate_H(x), grps)
-
     shuffle!(pos_s)
     #todo create a vector of vectors: each age group with their respective behaviors
     #? this should improve performance
     
-    Bj = map(x-> get_age_behav(x), grps)
-
     # go through every infectious person
     for i in pos_s    
             x = humans[i] 
             xhealth = x.health
-            if xhealth ∈ (PRE, INF, ASYMP)
-                
-                cnts = Int(x.nextday_meetcnt)
-                cnts == 0 && continue # skip person if no contacts
-                #general population contact
-                gpw = Int.(round.(cm[x.ag].*cnts))
-
-                perform_contacts(x,gpw,grps,xhealth, Pj, Bj)
-            end
+            perform_contacts(x,grps,xhealth)
+            
     end
     #return totalmet, totalinf
 end
 export dyntrans
 
-function return_contacts(x::Human, g::Int64, Pji::Matrix{Float64}, Bji::Vector{Vector{Int64}})
+function return_contacts(x::Human, gpw::Vector{Int64}, Bji::Vector{Vector{Int64}})
 
-
-    if g == 0
-        aux = Vector{Int}(undef, 0)
-        return aux
-    end
-
-    Pjj = Pji[Int(x.vac_behavior)+1, :]
-    # sampling the groups based on H
-    gr = sample(1:length(Pjj), Weights(Pjj), g, replace = true)
-    
-    vector2 = [v_basis[i] for i in gr]
-    
-    # counting the number of contact in each group
-    contagens = countmap(vector2)
-    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
     
     aux = [Int[] for _ in eachindex(Bji)]
-    for i in eachindex(contagem_vetor)
-        if length(Bji[i]) > 0
-            aux[i] = sample(Bji[i], contagem_vetor[i], replace = true)
+    
+    for (i, g) in enumerate(gpw)
+        if g == 0
+            aux = Vector{Int}(undef, 0)
+            return aux
         end
+        if length(Bji[i]) > 0
+            aux[i] = sample(Bji[i], g, replace = true)
+        end
+
     end
+
+    
 
     aux = reduce(vcat, aux)
 
-
-    return aux#gp[aux]
+    return aux
 
 end
 
-function perform_contacts(x::Human,gpw::Vector{Int64},grp_sample::Vector{Vector{Int64}},xhealth::HEALTH, Pj::Vector{Matrix{Float64}}, Bj::Vector{SizedVector{4, Vector{Int64}, Vector{Vector{Int64}}}})
+function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HEALTH)
 
-    for (i, g) in enumerate(gpw) 
-        meet = return_contacts(x, g, Pj[i], Vector(Bj[i]))#rand(grp_sample[i], g)   # sample the people from each group
+    for j in x.connections 
         # go through edach person
-        for j in meet 
-            y = humans[j]
-            
-            if y.health == SUS && y.swap == UNDEF
-                
-                beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
-                
-                if rand() < beta
-                    y.exp = y.tis   ## force the move to latent in the next time step.
-                    y.sickfrom = xhealth ## stores the infector's status to the infectee's sickfrom
-                    y.sickby = y.sickby < 0 ? x.idx : y.sickby
-                    y.swap = LAT
-                    y.swap_status = LAT
-                    y.daysinf = 0
-                    y.dur = sample_epi_durations(y)
+         
+        y = humans[j]
+
+        if rand() < p.h
+            y = humans[rand(grp_sample[y.ag])]
+        end
+
+    
+        if x.vac_status*y.vac_status == 0 # only gets to it if it is necessary
+            if x.vac_status == 0 && x.vac_behavior != UNDEFV
+                y.contacts_vac[Int(x.vac_behavior)+1] += 1
+            end
+
+            if y.vac_status == 0 && y.vac_behavior != UNDEFV
+                x.contacts_vac[Int(y.vac_behavior)+1] += 1
+            end
+
+            if x.vac_status == 1
+                if x.wentto == 1
+                    if  x.health_status == REC
+                        y.contacts_vac[5] += 1
+                    elseif x.health_status == DED
+                        y.contacts_vac[6] += 1
+                    end
                 end
+                if x.vac_behavior == PRO
+                    y.contacts_vac[7] += 1
+                end
+                y.contacts_vac[8] += 1
+
+            elseif y.vac_behavior == 1
+                if y.wentto == 1
+                    if  y.health_status == REC
+                        x.contacts_vac[5] += 1
+                    elseif y.health_status == DED
+                        x.contacts_vac[6] += 1
+                    end
+                end
+                if y.vac_behavior == PRO
+                    x.contacts_vac[7] += 1
+                end
+                x.contacts_vac[8] += 1
             end
         end
+        
+        if xhealth in (ASYMP, INF) && y.health == SUS && y.swap == UNDEF
+            
+            beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
+            
+            if rand() < beta
+                y.exp = y.tis   ## force the move to latent in the next time step.
+                y.sickfrom = xhealth ## stores the infector's status to the infectee's sickfrom
+                y.sickby = y.sickby < 0 ? x.idx : y.sickby
+                y.swap = LAT
+                y.swap_status = LAT
+                y.daysinf = 0
+                y.dur = sample_epi_durations(y)
+            end
+        end
+
+
+
+        
     end  
     
     x.nextday_meetcnt = 0
