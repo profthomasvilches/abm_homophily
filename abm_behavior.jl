@@ -501,16 +501,16 @@ function insert_infected(health, num, ag)
 end
 export insert_infected
 
-function get_alphas()
-    αv = p.κ*rand(Distributions.Beta(2,3))
-    αsv = p.κ*rand(Distributions.Beta(3,4))
-    αsl = p.κ*rand(Distributions.Beta(3,3))
-    αsh = p.κ*rand(Distributions.Beta(4,3))
-    αsa = p.κ*rand(Distributions.Beta(3,2))
-    αrv = p.κ*rand(Distributions.Beta(3,2))
+# function get_alphas()
+#     αv = p.κ*rand(Distributions.Beta(2,3))
+#     αsv = p.κ*rand(Distributions.Beta(3,4))
+#     αsl = p.κ*rand(Distributions.Beta(3,3))
+#     αsh = p.κ*rand(Distributions.Beta(4,3))
+#     αsa = p.κ*rand(Distributions.Beta(3,2))
+#     αrv = p.κ*rand(Distributions.Beta(3,2))
 
-    return αv, αsv, αsl, αsh, αsa, αrv
-end
+#     return αv, αsv, αsl, αsh, αsa, αrv
+# end
 
 function time_update(nvac::Int64)
 
@@ -522,7 +522,7 @@ function time_update(nvac::Int64)
         
         if x.tis >= x.exp             
             if x.swap_status == LAT
-                move_to_latent(x)
+                move_to_latent(x) 
             elseif x.swap_status == PRE
                 move_to_pre(x)
             elseif x.swap_status == ASYMP
@@ -541,7 +541,9 @@ function time_update(nvac::Int64)
 
         # behavioral change
         update_behavior(x)
-
+        
+        x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
+    
         #get_nextday_counts(x)
         
     end
@@ -629,8 +631,6 @@ function update_behavior(x::Human)
 
     end
 
-    x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
-    
 end
 
 function sample_epi_durations(y::Human)
@@ -799,7 +799,7 @@ export _get_betavalue
     ag = x.ag
     #if person is isolated, they can recieve only 3 maximum contacts
 
-    cnt = max(1, rand(negative_binomials(ag))) ##using the contact average for shelter-in
+    cnt = min(max(1, rand(negative_binomials(ag))), 254) ##using the contact average for shelter-in
     
     x.nextday_meetcnt = cnt
 

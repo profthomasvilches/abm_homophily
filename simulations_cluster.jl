@@ -5,10 +5,10 @@ using DataFrames
 using CSV
 using Query
 using Statistics
-using ClusterManagers
 using Dates
 using DelimitedFiles
 
+using ClusterManagers
 ENV["JULIA_WORKER_TIMEOUT"] = "600"
 
 addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
