@@ -40,7 +40,7 @@ Base.@kwdef mutable struct Human
     daysinf::Int64 = 999 
     isofalse::Bool = false
     
-    betas_vac::Vector{Float32} = Float32.([0.0; 0.0; 0.0; 0.0; 0.0]) # bs, bh, bl, ba, be
+    betas_vac::Vector{Float32} = Float32.([0.0; 0.0; 0.0; 0.0; 0.0; 0.0; 0.0]) # bs, bh, bl, ba, be
    
     totaldaysiso::Int16 = 0  
 end
@@ -183,12 +183,11 @@ function main(ip::ModelParameters,sim::Int64)
         
     end
     
-    remaining_doses::Int64 = 0
     # start the time loop
     for st = 1:p.modeltime
         
         
-        remaining_doses = vaccination(remaining_doses, sim)
+        vaccination(sim)
         vac_number[st] = sum([x.vac_status for x in humans])
         #     for x in humans
         # #        if x.iso && !(x.health_status in (HOS,ICU,DED)) # Taiye: Depends on whether we are considering HOS, ICU and DED.
@@ -211,13 +210,13 @@ function main(ip::ModelParameters,sim::Int64)
 end
 export main
 
-function vaccination(remaining_doses::Int64, sim::Int64)
+function vaccination(sim::Int64)
     if p.vaccination_rate == 0
         return 0
     end
     rng = MersenneTwister(1234*sim)
     # pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
-    pos = Iterators.take(shuffle(rng, findall(x -> x, behaviors)), p.vaccination_rate+remaining_doses)
+    pos = Iterators.take(shuffle(rng, findall(x -> x, behaviors)), p.vaccination_rate)
 
     for i in pos
         humans[i].vac_status = 1
@@ -418,12 +417,14 @@ function getting_b_values(p::ModelParameters)
         return [1-p.b; p.b; 1-p.b; p.b; p.b]# bs, bh, bl, ba, be
     elseif p.b_value == :prob
 
-        b1 = p.b
-        b2 = round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
-        b3 = round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
-        b4 = round(rand(Distributions.Beta(1, 200)), digits = 5) #bl
-        b5 = isnothing(p.probrec) ? round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
-        return Float32.([b1; b3; b4; b2./2; b5]./10)
+        b1 = round(rand(Distributions.Uniform(0.08, 0.12)), digits = 5)#p.b
+        b2 = round(rand(Distributions.Uniform(0.05, 0.08)), digits = 5)#round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
+        b3 = round(rand(Distributions.Uniform(0.02, 0.05)), digits = 5)#round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
+        b4 = round(rand(Distributions.Uniform(0.03, 0.06)), digits = 5)#round(rand(Distributions.Beta(1, 20)), digits = 5) #bl
+        b5 = isnothing(p.probrec) ? round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) : Float32(p.probrec)  #round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
+        b6 = round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) #bpl
+        b7 = round(rand(Distributions.Uniform(0.06, 0.09)), digits = 5) #bpl
+        return Float32.([b1; b2; b3; b4;  b5; b6; b7])
     else
         error("no strategy set for b values")
     end
@@ -583,9 +584,9 @@ function update_behavior(x::Human)
             end
         end
     elseif x.vac_behavior == HES
-          # probability of getting PRO
+          # probability of getting LIK
           n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1] 
-          prob1 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
+          prob1 = (1-x.betas_vac[7])^n1 # bs, bh, bl, ba, be
   
           # probability of getting anti
           n2 = x.contacts_vac[4]
@@ -612,7 +613,23 @@ function update_behavior(x::Human)
             x.vac_behavior = HES
             
         end
+    elseif x.vac_behavior == PRO && x.vac_status == 0
+        # probability of getting likely
+        # probability of getting likely
+        n1 = x.contacts_vac[Int(LIK)+1]+ x.contacts_vac[Int(HES)+1]+x.contacts_vac[Int(ANT)+1]# number of vaccinated in contact
+        prob1 = (1-x.betas_vac[6])^n1 # bs, bh, bl, ba, be
+
+
+        if rand() < 1-prob1 # probability of getting at least one of the changes
+            
+            x.vac_behavior = LIK
+            behaviors[x.idx] = false
+            
+        end
+
     end
+
+    x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
     
 end
 
@@ -782,7 +799,7 @@ export _get_betavalue
     ag = x.ag
     #if person is isolated, they can recieve only 3 maximum contacts
 
-    cnt = rand(negative_binomials(ag)) ##using the contact average for shelter-in
+    cnt = max(1, rand(negative_binomials(ag))) ##using the contact average for shelter-in
     
     x.nextday_meetcnt = cnt
 
@@ -849,8 +866,8 @@ function return_contacts(x::Human, gpw::Vector{Int64}, Bji::Vector{Vector{Int64}
     
     for (i, g) in enumerate(gpw)
         if g == 0
-            aux = Vector{Int}(undef, 0)
-            return aux
+            aux[i] = Vector{Int}(undef, 0)
+            continue
         end
         if length(Bji[i]) > 0
             aux[i] = sample(Bji[i], g, replace = true)
@@ -878,41 +895,27 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
         end
 
     
-        if x.vac_status*y.vac_status == 0 # only gets to it if it is necessary
-            if x.vac_status == 0 && x.vac_behavior != UNDEFV
-                y.contacts_vac[Int(x.vac_behavior)+1] += 1
-            end
-
+        if x.vac_status*y.vac_status == 0 && y.health != DED# only gets to it if it is necessary
+            
             if y.vac_status == 0 && y.vac_behavior != UNDEFV
                 x.contacts_vac[Int(y.vac_behavior)+1] += 1
-            end
-
-            if x.vac_status == 1
-                if x.wentto == 1
-                    if  x.health_status == REC
-                        y.contacts_vac[5] += 1
-                    elseif x.health_status == DED
-                        y.contacts_vac[6] += 1
-                    end
-                end
-                if x.vac_behavior == PRO
-                    y.contacts_vac[7] += 1
-                end
-                y.contacts_vac[8] += 1
-
-            elseif y.vac_behavior == 1
+            elseif y.vac_status == 1
                 if y.wentto == 1
                     if  y.health_status == REC
                         x.contacts_vac[5] += 1
                     elseif y.health_status == DED
                         x.contacts_vac[6] += 1
                     end
+                else
+                    if y.vac_behavior == PRO # redundant
+                        x.contacts_vac[7] += 1
+                    end
+                    x.contacts_vac[8] += 1
                 end
-                if y.vac_behavior == PRO
-                    x.contacts_vac[7] += 1
-                end
-                x.contacts_vac[8] += 1
+               
+                
             end
+
         end
         
         if xhealth in (ASYMP, INF) && y.health == SUS && y.swap == UNDEF
@@ -935,7 +938,6 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
         
     end  
     
-    x.nextday_meetcnt = 0
 end
 function contact_matrix()
     # regular contacts, just with 5 age groups. 
