@@ -106,9 +106,12 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
 
     R01 = [cdr[i].R0 for i=1:nsims]
     vac_number = [cdr[i].vac_number for i=1:nsims]
+
+    connections_list = vcat([cdr[i].connections_list  for i = 1:nsims]...)
    
     writedlm(string(folderprefix,"/R01.dat"),R01)
     writedlm(string(folderprefix,"/vac_number.dat"),vac_number)
+    CSV.write(string(folderprefix,"/connections_list.dat"),connections_list)
 
     return mydfs
 end
@@ -118,11 +121,11 @@ end
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
     if isnothing(ip.probrec)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
-        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+        #RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+        RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     else
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
-        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+        #RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+        RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
     end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)

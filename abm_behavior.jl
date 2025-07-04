@@ -91,7 +91,7 @@ export popsize, ModelParameters, HEALTH, VACS, Human, humans, BETAS, v_basis, po
 function runsim(simnum, ip::ModelParameters)
     GC.gc()
     # function runs the `main` function, and collects the data as dataframes. 
-    hmatrix, vmatrix, hh1,vac_number = main(ip,simnum)            
+    hmatrix, vmatrix, hh1,vac_number, initial_state = main(ip,simnum)            
 
     #Get the R0
     
@@ -105,6 +105,7 @@ function runsim(simnum, ip::ModelParameters)
     all1 = _collectdf(hmatrix)
     
     allv = _collectdfv(vmatrix)
+
 
     age_groups = [0:14, 15:24, 25:34, 35:44, 45:54, 55:64, 65:999]
     ags = map(x->findfirst(y-> x.age in y, age_groups),humans) # store a vector of the age group distribution 
@@ -180,7 +181,7 @@ function main(ip::ModelParameters,sim::Int64)
         gpw = Int.(round.(cm[x.ag].*cnts))
          
         x.connections = return_contacts(x, gpw, Vector(Bj[Int(x.vac_behavior)+1]))
-        
+        #got back to a more random network
         for j in eachindex(x.connections)
             
             if rand() < p.h
@@ -189,6 +190,8 @@ function main(ip::ModelParameters,sim::Int64)
         end
     end
     
+    initial_state = [Int(humans[i].vac_behavior) for i in eachindex(humans)]
+
     # start the time loop
     for st = 1:p.modeltime
         
@@ -212,7 +215,7 @@ function main(ip::ModelParameters,sim::Int64)
 
     
     
-    return hmatrix, vmatrix, h_init1, vac_number## return the model state as well as the age groups. 
+    return hmatrix, vmatrix, h_init1, vac_number, initial_state## return the model state as well as the age groups. 
 end
 export main
 
@@ -895,6 +898,10 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
         # go through edach person
          
         y = humans[j]
+        # getting back to this one
+        # if rand() < p.h
+        #     y = humans[rand(grp_sample[y.ag])]
+        # end
     
         if x.vac_status*y.vac_status == 0 && y.health != DED# only gets to it if it is necessary
             
