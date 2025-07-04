@@ -919,18 +919,18 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
 
         end
         
-        if xhealth in (ASYMP, INF) && y.health == SUS && y.swap == UNDEF
+        if xhealth == SUS && y.health in (ASYMP, INF) && x.swap == UNDEF
             
-            beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
+            beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
             
             if rand() < beta
-                y.exp = y.tis   ## force the move to latent in the next time step.
-                y.sickfrom = xhealth ## stores the infector's status to the infectee's sickfrom
-                y.sickby = y.sickby < 0 ? x.idx : y.sickby
-                y.swap = LAT
-                y.swap_status = LAT
-                y.daysinf = 0
-                y.dur = sample_epi_durations(y)
+                x.exp = x.tis   ## force the move to latent in the next time step.
+                x.sickfrom = y.health ## stores the infector's status to the infectee's sickfrom
+                x.sickby = x.sickby < 0 ? y.idx : x.sickby
+                x.swap = LAT
+                x.swap_status = LAT
+                x.daysinf = 0
+                x.dur = sample_epi_durations(x)
             end
         end
 
