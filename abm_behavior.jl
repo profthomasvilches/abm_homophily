@@ -78,7 +78,7 @@ Base.show(io::IO, ::MIME"text/plain", z::Human) = dump(z)
 
 include("matrices.jl")
 ## constants 
-const popsize = 3000
+const popsize = 10000
 const humans = Array{Human}(undef, popsize) 
 const p = ModelParameters()  ## setup default parameters
 const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
@@ -181,6 +181,12 @@ function main(ip::ModelParameters,sim::Int64)
          
         x.connections = return_contacts(x, gpw, Vector(Bj[Int(x.vac_behavior)+1]))
         
+        for j in eachindex(x.connections)
+            
+            if rand() < p.h
+                x.connections[j] = rand(grps[humans[x.connections[j]].ag])
+            end
+        end
     end
     
     # start the time loop
@@ -889,11 +895,6 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
         # go through edach person
          
         y = humans[j]
-
-        if rand() < p.h
-            y = humans[rand(grp_sample[y.ag])]
-        end
-
     
         if x.vac_status*y.vac_status == 0 && y.health != DED# only gets to it if it is necessary
             
