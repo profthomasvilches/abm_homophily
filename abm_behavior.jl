@@ -182,12 +182,12 @@ function main(ip::ModelParameters,sim::Int64)
          
         x.connections = return_contacts(x, gpw, Vector(Bj[Int(x.vac_behavior)+1]))
         #got back to a more random network
-        for j in eachindex(x.connections)
+        # for j in eachindex(x.connections)
             
-            if rand() < p.h
-                x.connections[j] = rand(grps[humans[x.connections[j]].ag])
-            end
-        end
+        #     if rand() < p.h
+        #         x.connections[j] = rand(grps[humans[x.connections[j]].ag])
+        #     end
+        # end
     end
     
     initial_state = [Int(humans[i].vac_behavior) for i in eachindex(humans)]
@@ -899,9 +899,9 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
          
         y = humans[j]
         # getting back to this one
-        # if rand() < p.h
-        #     y = humans[rand(grp_sample[y.ag])]
-        # end
+        if rand() < p.h
+            y = humans[rand(grp_sample[y.ag])]
+        end
     
         if x.vac_status*y.vac_status == 0 && y.health != DED# only gets to it if it is necessary
             
