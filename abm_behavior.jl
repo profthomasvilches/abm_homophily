@@ -78,7 +78,7 @@ Base.show(io::IO, ::MIME"text/plain", z::Human) = dump(z)
 
 include("matrices.jl")
 ## constants 
-const popsize = 10000
+const popsize = 50000
 const humans = Array{Human}(undef, popsize) 
 const p = ModelParameters()  ## setup default parameters
 const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
@@ -510,18 +510,28 @@ function insert_infected(health, num, ag)
 end
 export insert_infected
 
-# function get_alphas()
-#     αv = p.κ*rand(Distributions.Beta(2,3))
-#     αsv = p.κ*rand(Distributions.Beta(3,4))
-#     αsl = p.κ*rand(Distributions.Beta(3,3))
-#     αsh = p.κ*rand(Distributions.Beta(4,3))
-#     αsa = p.κ*rand(Distributions.Beta(3,2))
-#     αrv = p.κ*rand(Distributions.Beta(3,2))
+function get_alphas()
+    αv = p.κ*rand(Distributions.Beta(2,3))
+    αsv = p.κ*rand(Distributions.Beta(3,4))
+    αsl = p.κ*rand(Distributions.Beta(3,3))
+    αsh = p.κ*rand(Distributions.Beta(4,3))
+    αsa = p.κ*rand(Distributions.Beta(3,2))
+    αrv = p.κ*rand(Distributions.Beta(3,2))
 
-#     return αv, αsv, αsl, αsh, αsa, αrv
-# end
+    return αv, αsv, αsl, αsh, αsa, αrv
+end
 
 function time_update(nvac::Int64)
+
+    # counters to calculate incidence
+    αv, αsv, αsl, αsh, αsa, αrv = get_alphas()
+    contagens = countmap([x.vac_behavior for x in humans])
+    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
+    
+    ninfvac = length(findall(x -> x.vac_status == 1 && x.wentto == 1, humans))
+    
+    contagem_vetor = [nvac; contagem_vetor; ninfvac]
+    contagem_vetor[2] = contagem_vetor[2]-nvac
 
     for x in humans 
         x.tis += 1 
@@ -549,7 +559,7 @@ function time_update(nvac::Int64)
         end
 
         # behavioral change
-        update_behavior(x)
+        update_behavior(x, [αv, αsv, αsl, αsh, αsa, αrv], contagem_vetor)
         
         x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
     
@@ -561,10 +571,14 @@ end
 export time_update
 
 
-function update_behavior(x::Human)
+function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64})
 
     #? create a vector of Pv, Pa...
     #? 
+
+    αv, αsv, αsl, αsh, αsa, αrv = alphas
+    V, Sv, L, H, A, Rv = ninds
+
 
     if x.vac_behavior == LIK
         # probability of getting PRO
@@ -580,16 +594,28 @@ function update_behavior(x::Human)
         prob3 = (1-x.betas_vac[5])^n3
         #? go to pro or Hes
         #? 1-prob1*prob2*prob3
-        if ((1-prob1)+(1-prob2*prob3)) == 0
-            return
-        end
-        if rand() < (1-prob1)/((1-prob1)+(1-prob2*prob3))
-            if rand() < 1-prob1 #? Is the individual changing?
+
+        #! global influence
+         # probability of getting PRO
+        n1 = (αv*V+αsv*Sv)/popsize
+        prob11 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
+
+        # probability of getting hesitant
+        n2 = (αsh*H+αsa*A)/popsize
+        prob21 = (1-x.betas_vac[2])^n2
+
+        # probability related to vaccinated and recovered
+        n3 = αrv*Rv/popsize
+        prob31 = (1-x.betas_vac[5])^n3
+
+
+        if rand() < (1-prob1*prob11)/((1-prob1*prob11)+(1-prob2*prob3*prob21*prob31))
+            if rand() < 1-prob1*prob11 #? Is the individual changing?
                 x.vac_behavior = PRO
                 behaviors[x.idx] = true
             end
         else
-            if rand() < 1-prob2*prob3
+            if rand() < 1-prob2*prob3*prob21*prob31
                 
                 x.vac_behavior = HES
             end
@@ -602,24 +628,33 @@ function update_behavior(x::Human)
           # probability of getting anti
           n2 = x.contacts_vac[4]
           prob2 = (1-x.betas_vac[4])^n2
+
+
+          n1 = (αsl*L+αsv*Sv+αv*V)/popsize 
+          prob11 = (1-x.betas_vac[7])^n1 # bs, bh, bl, ba, be
   
+          # probability of getting anti
+          n2 = αsa*A/popsize
+          prob21 = (1-x.betas_vac[4])^n2
   
-        if rand() < (1-prob1)/((1-prob1)+(1-prob2))
-            if rand() < 1-prob1
+        if rand() < (1-prob1*prob11)/((1-prob1*prob11)+(1-prob2*prob21))
+            if rand() < 1-prob1*prob11
                 x.vac_behavior = LIK
             end
         else
-            if rand() < 1-prob2
+            if rand() < 1-prob2*prob21
                 x.vac_behavior = ANT
             end
         end 
     elseif x.vac_behavior == ANT
-        # probability of getting likely
+        # probability of getting hes
         n1 = x.contacts_vac[8] # number of vaccinated in contact
         prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
+        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
+        prob11 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
 
 
-        if rand() < 1-prob1 # probability of getting at least one of the changes
+        if rand() < 1-prob1*prob11 # probability of getting at least one of the changes
             
             x.vac_behavior = HES
             
@@ -630,8 +665,11 @@ function update_behavior(x::Human)
         n1 = x.contacts_vac[Int(LIK)+1]+ x.contacts_vac[Int(HES)+1]+x.contacts_vac[Int(ANT)+1]# number of vaccinated in contact
         prob1 = (1-x.betas_vac[6])^n1 # bs, bh, bl, ba, be
 
+        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
+        prob11 = (1-x.betas_vac[6])^n1 # bs, bh, bl, ba, be
 
-        if rand() < 1-prob1 # probability of getting at least one of the changes
+
+        if rand() < 1-prob1*prob11 # probability of getting at least one of the changes
             
             x.vac_behavior = LIK
             behaviors[x.idx] = false
