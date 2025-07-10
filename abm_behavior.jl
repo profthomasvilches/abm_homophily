@@ -71,6 +71,7 @@ end
     probrec::Union{Nothing, Float64} = nothing
     groupinitial::Union{Nothing, Int8} = nothing
     κ::Float64 = 2.0
+    mult_b::Vector{Float64} = ones(Float64, 7)
 end
 
 
@@ -433,7 +434,7 @@ function getting_b_values(p::ModelParameters)
         b5 = isnothing(p.probrec) ? round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) : Float32(p.probrec)  #round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
         b6 = round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) #bpl
         b7 = round(rand(Distributions.Uniform(0.06, 0.09)), digits = 5) #bpl
-        return Float32.([b1; b2; b3; b4;  b5; b6; b7])
+        return Float32.([b1; b2; b3; b4;  b5; b6; b7].*p.mult_b)
     else
         error("no strategy set for b values")
     end
