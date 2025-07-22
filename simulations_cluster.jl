@@ -117,12 +117,16 @@ end
 
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
-    if isnothing(ip.probrec)
+    if isnothing(ip.probrec) && isnothing(ip.groupinitial)
         RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
         #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
-    else
+    elseif isnothing(ip.groupinitial)
         RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
         #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+    elseif isnothing(ip.probrec)
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value, "_", ip.groupinitial) ## 
+    else
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value, "_", ip.groupinitial,"_", ip.probrec)
     end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)
