@@ -29,6 +29,8 @@ Base.@kwdef mutable struct Human
     #comorbidity::Int8 = 0 ##does the individual has any comorbidity?
     
     vac_status::Int8 = 0 ##
+    immune::Int8 = 0
+    nvac_days::Int8 = 0
     wentto::Int8 = 0
     incubationp::Int16 = 0
 
@@ -61,6 +63,7 @@ end
     vaccine_eff::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccine_eff_symp::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccination_rate::Int64 = 10
+    vac_immunity_period::Int8 = 0
     
     file_index::Int16 = 0
     α::Float64 = 1.0
@@ -230,6 +233,7 @@ function vaccination(sim::Int64)
 
     for i in pos
         humans[i].vac_status = 1
+        humans[i].nvac_days = 0
         behaviors[i] = false
     end
     #remaining_doses = max(0, p.vaccination_rate+remaining_doses-length(pos))
@@ -540,6 +544,16 @@ function time_update(nvac::Int64)
          
         x.daysinf += 1
         
+        if x.vac_status == 1
+            if x.immune == 0
+                if x.nvac_days >= p.vac_immunity_period
+                    x.immune = 1
+                else
+                    x.nvac_days += 1
+                end
+            end
+        end
+        
         if x.tis >= x.exp             
             if x.swap_status == LAT
                 move_to_latent(x) 
@@ -713,7 +727,7 @@ function move_to_latent(x::Human)
     g = findfirst(y-> y >= x.age, age_thres)
 
  
-    if rand() < (symp_pcts[g])*(1-p.vaccine_eff_symp)^x.vac_status
+    if rand() < (symp_pcts[g])*(1-p.vaccine_eff_symp)^x.immune
        
         x.swap = PRE
         x.swap_status = PRE
@@ -768,7 +782,8 @@ export move_to_pre
 function move_to_inf(x::Human)
     ## transfers human h to the severe infection stage for γ days
     ## for swap, check if person will be hospitalized, selfiso, die, or recover
- 
+    θ = (0.95, 0.9, 0.85, 0.6, 0.2)
+
     groups = [0:34,35:54,55:69,70:84,85:100]
     gg = findfirst(y-> x.age in y,groups)
 
@@ -783,7 +798,7 @@ function move_to_inf(x::Human)
 
        
    # else ## no hospital for this lucky (but severe) individual 
-    if rand() < mh[gg]
+    if rand() < mh[gg]*(1-θ[x.ag])
             x.exp = x.dur[4] 
             x.swap = DED
             x.swap_status = DED
@@ -967,7 +982,7 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
         
         if xhealth == SUS && y.health in (ASYMP, INF) && x.swap == UNDEF
             
-            beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
+            beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.immune
             
             if rand() < beta
                 x.exp = x.tis   ## force the move to latent in the next time step.
