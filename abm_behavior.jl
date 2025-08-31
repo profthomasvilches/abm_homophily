@@ -73,7 +73,7 @@ end
     isolation_days::Int64 = 5
     probrec::Union{Nothing, Float64} = nothing
     groupinitial::Union{Nothing, Int8} = nothing
-    κ::Float64 = 2.0
+    κ::Float64 = 1.0
     mult_b::Vector{Float64} = ones(Float64, 7)
 end
 

@@ -11,7 +11,7 @@ using DelimitedFiles
 using ClusterManagers
 ENV["JULIA_WORKER_TIMEOUT"] = "600"
 
-addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
+addprocs(ClusterManagers.SlurmManager(500), N=16, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
 #addprocs(10)
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
@@ -118,15 +118,15 @@ end
 function create_folder_new(ip::cv.ModelParameters)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
     if isnothing(ip.probrec) && isnothing(ip.groupinitial)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value) ## 
         #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     elseif isnothing(ip.groupinitial)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value,"_", ip.probrec)
         #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
     elseif isnothing(ip.probrec)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value, "_", ip.groupinitial) ## 
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value, "_", ip.groupinitial) ## 
     else
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value, "_", ip.groupinitial,"_", ip.probrec)
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value, "_", ip.groupinitial,"_", ip.probrec)
     end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)
@@ -135,9 +135,9 @@ function create_folder_new(ip::cv.ModelParameters)
     return RF
 end
 
-function run_param(fidx::Int64, beta::Float64, hh::Float64, bb::Float64 = 0.5, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, nsims::Int64 = 1000, multib::Vector{Float64} = ones(Float64, 7), im_p::Int8 = Int8(0))
+function run_param(fidx::Int64, beta::Float64, hh::Float64, kapa::Float64 = 2.0, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, nsims::Int64 = 1000, multib::Vector{Float64} = ones(Float64, 7), im_p::Int8 = Int8(0))
      GC.gc()
-    @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), b = $bb, b_value=$(QuoteNode(scen)), file_index = $fidx,
+    @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), κ = $kapa, b_value=$(QuoteNode(scen)), file_index = $fidx,
     vaccination_rate = $vac_rate, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec,
     groupinitial = $group_init, mult_b = $multib, vac_immunity_period = $im_p)
     folder = create_folder_new(ip)
