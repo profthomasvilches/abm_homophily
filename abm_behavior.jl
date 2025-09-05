@@ -594,19 +594,20 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
     αv, αsv, αsl, αsh, αsa, αrv = alphas
     V, Sv, L, H, A, Rv = ninds
 
+    s_vac = sum(x.contacts_vac[1:end-1])
 
     if x.vac_behavior == LIK
         # probability of getting PRO
-        n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1]
-        prob1 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
+        n1 = αv*x.contacts_vac[7]+αsv*x.contacts_vac[1]
+        prob1 = (1-x.betas_vac[1])^(n1/s_vac) # bs, bh, bl, ba, be
 
         # probability of getting hesitant
-        n2 = x.contacts_vac[3]+x.contacts_vac[4]
-        prob2 = (1-x.betas_vac[2])^n2
+        n2 = αsh*x.contacts_vac[3]+αsa*x.contacts_vac[4]
+        prob2 = (1-x.betas_vac[2])^(n2/s_vac)
 
         # probability related to vaccinated and recovered
-        n3 = x.contacts_vac[5]
-        prob3 = (1-x.betas_vac[5])^n3
+        n3 = αrv*x.contacts_vac[5]
+        prob3 = (1-x.betas_vac[5])^(n3/s_vac)
         #? go to pro or Hes
         #? 1-prob1*prob2*prob3
 
@@ -637,11 +638,11 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
         end
     elseif x.vac_behavior == HES
           # probability of getting LIK
-          n1 = x.contacts_vac[7]+p.α*x.contacts_vac[1] 
+          n1 = (αsl*x.contacts_vac[2]+αsv*x.contacts_vac[1]+αv*x.contacts_vac[7])/s_vac 
           prob1 = (1-x.betas_vac[7])^n1 # bs, bh, bl, ba, be
   
           # probability of getting anti
-          n2 = x.contacts_vac[4]
+          n2 = αsa*x.contacts_vac[4]/s_vac
           prob2 = (1-x.betas_vac[4])^n2
 
 
@@ -663,7 +664,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
         end 
     elseif x.vac_behavior == ANT
         # probability of getting hes
-        n1 = x.contacts_vac[8] # number of vaccinated in contact
+        n1 = (αsh*x.contacts_vac[3]+αsl*x.contacts_vac[2])/s_vac  # number of vaccinated in contact
         prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
         n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
         prob11 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
@@ -677,7 +678,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
     elseif x.vac_behavior == PRO && x.vac_status == 0
         # probability of getting likely
         # probability of getting likely
-        n1 = x.contacts_vac[Int(LIK)+1]+ x.contacts_vac[Int(HES)+1]+x.contacts_vac[5]# number of vaccinated in contact
+        n1 = (αsh*x.contacts_vac[3]+αsl*x.contacts_vac[2]+αrv*x.contacts_vac[5])/s_vac# number of vaccinated in contact
         prob1 = (1-x.betas_vac[6])^n1 # bs, bh, bl, ba, be
 
         n1 = (αsl*L+αsh*H+αrv*Rv)/popsize # number of vaccinated in contact
@@ -969,10 +970,8 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
                         x.contacts_vac[6] += 1
                     end
                 else
-                    if y.vac_behavior == PRO # redundant
-                        x.contacts_vac[7] += 1
-                    end
-                    x.contacts_vac[8] += 1
+                    
+                    x.contacts_vac[7] += 1
                 end
                
                 
