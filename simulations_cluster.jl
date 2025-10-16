@@ -11,7 +11,7 @@ using DelimitedFiles
 using ClusterManagers
 ENV["JULIA_WORKER_TIMEOUT"] = "600"
 
-addprocs(ClusterManagers.SlurmManager(500), N=16, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
+addprocs(ClusterManagers.SlurmManager(250), N=8, topology=:master_worker, exeflags="--project=Project.toml"; W="300")
 #addprocs(10)
 @everywhere using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
 @everywhere include("abm_behavior.jl")
@@ -135,10 +135,10 @@ function create_folder_new(ip::cv.ModelParameters)
     return RF
 end
 
-function run_param(fidx::Int64, beta::Float64, hh::Float64, kapa::Float64 = 2.0, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, nsims::Int64 = 1000, multib::Vector{Float64} = ones(Float64, 7), im_p::Int8 = Int8(0))
+function run_param(fidx::Int64, beta::Float64, hh::Float64, kapa::Float64 = 2.0, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, nsims::Int64 = 1000, multib::Vector{Float64} = ones(Float64, 7), xi::Float64 = 1.0, im_p::Int8 = Int8(0))
      GC.gc()
     @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), κ = $kapa, b_value=$(QuoteNode(scen)), file_index = $fidx,
-    vaccination_rate = $vac_rate, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec,
+    vaccination_rate = $vac_rate, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec, ξ = $xi,
     groupinitial = $group_init, mult_b = $multib, vac_immunity_period = $im_p)
     folder = create_folder_new(ip)
 
