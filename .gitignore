@@ -4,3 +4,4 @@ outputs
 *.txt
 references
 figures
+*.py

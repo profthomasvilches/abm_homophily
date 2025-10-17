@@ -432,14 +432,14 @@ function getting_b_values(p::ModelParameters)
         return [1-p.b; p.b; 1-p.b; p.b; p.b]# bs, bh, bl, ba, be
     elseif p.b_value == :prob
 
-        b1 = round(rand(Distributions.Uniform(0.08, 0.12)), digits = 5)#p.b
-        b2 = round(rand(Distributions.Uniform(0.05, 0.08)), digits = 5)#round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
-        b3 = round(rand(Distributions.Uniform(0.02, 0.05)), digits = 5)#round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
-        b4 = round(rand(Distributions.Uniform(0.03, 0.06)), digits = 5)#round(rand(Distributions.Beta(1, 20)), digits = 5) #bl
-        b5 = isnothing(p.probrec) ? round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) : Float32(p.probrec)  #round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
-        b6 = round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) #bpl
-        b7 = round(rand(Distributions.Uniform(0.06, 0.09)), digits = 5) #bpl
-        return Float32.([b1; b2; b3; b4;  b5; b6; b7].*p.mult_b)
+        b1 = 0.01#round(rand(Distributions.Uniform(0.08, 0.12)), digits = 5)#p.b
+        b2 = 0.04#round(rand(Distributions.Uniform(0.05, 0.08)), digits = 5)#round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
+        b3 = 0.05#round(rand(Distributions.Uniform(0.02, 0.05)), digits = 5)#round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
+        b4 = 0.005#round(rand(Distributions.Uniform(0.03, 0.06)), digits = 5)#round(rand(Distributions.Beta(1, 20)), digits = 5) #bl
+       # b5 = isnothing(p.probrec) ? round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) : Float32(p.probrec)  #round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
+       # b6 = round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) #bpl
+       # b7 = round(rand(Distributions.Uniform(0.06, 0.09)), digits = 5) #bpl
+        return Float32.([b1; b2; b3; b4].*p.mult_b)
     else
         error("no strategy set for b values")
     end
@@ -517,20 +517,24 @@ end
 export insert_infected
 
 function get_alphas()
-    αv = p.κ*rand(Distributions.Beta(2,3))
-    αsv = p.κ*rand(Distributions.Beta(3,4))
+    αv = p.κ*rand(Distributions.Beta(4,2))
+    αsv = p.κ*rand(Distributions.Beta(4,2))
     αsl = p.κ*rand(Distributions.Beta(3,3))
-    αsh = p.κ*rand(Distributions.Beta(4,3))
-    αsa = p.κ*rand(Distributions.Beta(3,2))
-    αrv = p.κ*rand(Distributions.Beta(3,2))
+    αsh = p.κ*rand(Distributions.Beta(2,4))
+    αsa = p.κ*rand(Distributions.Beta(2,5))
+    βv = p.κ*rand(Distributions.Beta(3,2))
+    βsv = p.κ*rand(Distributions.Beta(3,2))
+    βsl = p.κ*rand(Distributions.Beta(2,3))
+    βsh = p.κ*rand(Distributions.Beta(3,4))
+    βsa = p.κ*rand(Distributions.Beta(4,3))
 
-    return αv, αsv, αsl, αsh, αsa, αrv
+    return αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa
 end
 
 function time_update(nvac::Int64)
 
     # counters to calculate incidence
-    αv, αsv, αsl, αsh, αsa, αrv = get_alphas()
+    αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa = get_alphas()
     contagens = countmap([x.vac_behavior for x in humans])
     contagem_vetor = [get(contagens, i, 0) for i in v_basis]
     
@@ -575,7 +579,7 @@ function time_update(nvac::Int64)
         end
 
         # behavioral change
-        update_behavior(x, [αv, αsv, αsl, αsh, αsa, αrv], contagem_vetor)
+        update_behavior(x, [αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa], contagem_vetor)
         
         x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
     
@@ -592,105 +596,119 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
     #? create a vector of Pv, Pa...
     #? 
 
-    αv, αsv, αsl, αsh, αsa, αrv = alphas
+    αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa = alphas
     V, Sv, L, H, A, Rv = ninds
 
     s_vac = sum(x.contacts_vac[1:end-1])
 
     if x.vac_behavior == LIK
-        # probability of getting PRO
-        n1 = p.ξ*αv*x.contacts_vac[7]+p.ξ*αsv*x.contacts_vac[1]
-        prob1 = (1-x.betas_vac[1])^(n1/s_vac) # bs, bh, bl, ba, be
+        
+        
+        r_pro = x.betas_vac[1]*(αv*x.contacts_vac[7]/s_vac+βv*V/popsize) # bs, bh, bl, ba, be
+        r_hes = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # bs, bh, bl, ba, be
+        r_ant = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # bs, bh, bl, ba, be
 
-        # probability of getting hesitant
-        n2 = p.ξ*αsh*x.contacts_vac[3]+p.ξ*αsa*x.contacts_vac[4]
-        prob2 = (1-x.betas_vac[2])^(n2/s_vac)
+        sr = (r_pro+r_hes+r_ant) #sum r
 
-        # probability related to vaccinated and recovered
-        n3 = p.ξ*αrv*x.contacts_vac[5]
-        prob3 = (1-x.betas_vac[5])^(n3/s_vac)
-        #? go to pro or Hes
-        #? 1-prob1*prob2*prob3
+        if rand() < (1-exp(-sr))
+            prob_pro = r_pro/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_ant = r_ant/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            #prob_comp = exp(-(r_pro+r_hes+r_ant))
 
-        #! global influence
-         # probability of getting PRO
-        n1 = (αv*V+αsv*Sv)/popsize
-        prob11 = (1-x.betas_vac[1])^n1 # bs, bh, bl, ba, be
+            r = rand()
 
-        # probability of getting hesitant
-        n2 = (αsh*H+αsa*A)/popsize
-        prob21 = (1-x.betas_vac[2])^n2
-
-        # probability related to vaccinated and recovered
-        n3 = αrv*Rv/popsize
-        prob31 = (1-x.betas_vac[5])^n3
-
-
-        if rand() < (1-prob1*prob11)/((1-prob1*prob11)+(1-prob2*prob3*prob21*prob31))
-            if rand() < 1-prob1*prob11 #? Is the individual changing?
+            if r < prob_pro
                 x.vac_behavior = PRO
-                behaviors[x.idx] = true
+            elseif r < prob_pro+prob_hes
+                x.vac_behavior = HES
+            else
+                x.vac_behavior = ANT
             end
-        else
-            if rand() < 1-prob2*prob3*prob21*prob31
-                
+
+        end
+
+    elseif x.vac_behavior == HES
+          
+        r_pro = x.betas_vac[1]*(αv*x.contacts_vac[7]/s_vac+βv*V/popsize) # bs, bh, bl, ba, be
+        r_lik = x.betas_vac[1]*( # same b for both
+            αsv*x.contacts_vac[1]/s_vac+βsv*Sv/popsize + # pro
+            αv*x.contacts_vac[7]/s_vac+βv*V/popsize # pro and vac
+        ) # bs, bh, bl, ba, be
+        r_ant = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # bs, bh, bl, ba, be
+
+        sr = (r_pro+r_lik+r_ant) #sum r
+
+        if rand() < (1-exp(-sr))
+            prob_pro = r_pro/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_ant = r_ant/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            #prob_comp = exp(-(r_pro+r_hes+r_ant))
+
+            r = rand()
+
+            if r < prob_pro
+                x.vac_behavior = PRO
+            elseif r < prob_pro+prob_lik
+                x.vac_behavior = LIK
+            else
+                x.vac_behavior = ANT
+            end
+        end
+    elseif x.vac_behavior == ANT
+        r_pro = x.betas_vac[1]*(αv*x.contacts_vac[7]/s_vac+βv*V/popsize) # bs, bh, bl, ba, be
+        r_lik = x.betas_vac[1]*( # same b for both
+            αsv*x.contacts_vac[1]/s_vac+βsv*Sv/popsize + # pro
+            αv*x.contacts_vac[7]/s_vac+βv*V/popsize # pro and vac
+        ) # bs, bh, bl, ba, be
+        r_hes = x.betas_vac[1]*( # same b for both
+            αsv*x.contacts_vac[1]/s_vac+βsv*Sv/popsize + # pro
+            αv*x.contacts_vac[7]/s_vac+βv*V/popsize # pro and vac
+        )+x.betas_vac[2]*(αsl*x.contacts_vac[2]/s_vac+βsl*L/popsize) # depends on likely
+         # bs, bh, bl, ba, be
+
+        sr = (r_pro+r_lik+r_hes) #sum r
+
+        if rand() < (1-exp(-sr))
+            prob_pro = r_pro/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            #prob_comp = exp(-(r_pro+r_hes+r_ant))
+
+            r = rand()
+
+            if r < prob_pro
+                x.vac_behavior = PRO
+            elseif r < prob_pro+prob_lik
+                x.vac_behavior = LIK
+            else
                 x.vac_behavior = HES
             end
         end
-    elseif x.vac_behavior == HES
-          # probability of getting LIK
-          n1 = p.ξ*(αsl*x.contacts_vac[2]+αsv*x.contacts_vac[1]+αv*x.contacts_vac[7])/s_vac 
-          prob1 = (1-x.betas_vac[7])^n1 # bs, bh, bl, ba, be
-  
-          # probability of getting anti
-          n2 = p.ξ*αsa*x.contacts_vac[4]/s_vac
-          prob2 = (1-x.betas_vac[4])^n2
-
-
-          n1 = (αsl*L+αsv*Sv+αv*V)/popsize 
-          prob11 = (1-x.betas_vac[7])^n1 # bs, bh, bl, ba, be
-  
-          # probability of getting anti
-          n2 = αsa*A/popsize
-          prob21 = (1-x.betas_vac[4])^n2
-  
-        if rand() < (1-prob1*prob11)/((1-prob1*prob11)+(1-prob2*prob21))
-            if rand() < 1-prob1*prob11
-                x.vac_behavior = LIK
-            end
-        else
-            if rand() < 1-prob2*prob21
-                x.vac_behavior = ANT
-            end
-        end 
-    elseif x.vac_behavior == ANT
-        # probability of getting hes
-        n1 = p.ξ*(αsh*x.contacts_vac[3]+αsl*x.contacts_vac[2])/s_vac  # number of vaccinated in contact
-        prob1 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
-        n1 = (αsl*L+αsh*H)/popsize # number of vaccinated in contact
-        prob11 = (1-x.betas_vac[3])^n1 # bs, bh, bl, ba, be
-
-
-        if rand() < 1-prob1*prob11 # probability of getting at least one of the changes
-            
-            x.vac_behavior = HES
-            
-        end
     elseif x.vac_behavior == PRO && x.vac_status == 0
-        # probability of getting likely
-        # probability of getting likely
-        n1 = p.ξ*(αsh*x.contacts_vac[3]+αsl*x.contacts_vac[2]+αrv*x.contacts_vac[5])/s_vac# number of vaccinated in contact
-        prob1 = (1-x.betas_vac[6])^n1 # bs, bh, bl, ba, be
+        r_ant = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # depends on anti
+        r_lik = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize)+
+        x.betas_vac[3]*(αsh*x.contacts_vac[3]/s_vac+βsh*H/popsize) # depends on A and H
+        r_hes = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # depends on anti
+         # bs, bh, bl, ba, be
 
-        n1 = (αsl*L+αsh*H+αrv*Rv)/popsize # number of vaccinated in contact
-        prob11 = (1-x.betas_vac[6])^n1 # bs, bh, bl, ba, be
+        sr = (r_ant+r_lik+r_hes) #sum r
 
+        if rand() < (1-exp(-sr))
+            prob_ant = r_ant/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
+            #prob_comp = exp(-(r_pro+r_hes+r_ant))
 
-        if rand() < 1-prob1*prob11 # probability of getting at least one of the changes
-            
-            x.vac_behavior = LIK
-            behaviors[x.idx] = false
-            
+            r = rand()
+
+            if r < prob_ant
+                x.vac_behavior = ANT
+            elseif r < prob_pro+prob_lik
+                x.vac_behavior = LIK
+            else
+                x.vac_behavior = HES
+            end
         end
 
     end
