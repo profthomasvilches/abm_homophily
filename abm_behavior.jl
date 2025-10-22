@@ -42,7 +42,7 @@ Base.@kwdef mutable struct Human
     daysinf::Int64 = 999 
     isofalse::Bool = false
     
-    betas_vac::Vector{Float32} = Float32.([0.0; 0.0; 0.0; 0.0; 0.0; 0.0; 0.0]) # bs, bh, bl, ba, be
+    betas_vac::Vector{Float32} = Float32.([0.0, 0.0, 0.0, 0.0]) # bs, bh, bl, ba, be
    
     totaldaysiso::Int16 = 0  
 end
@@ -74,14 +74,13 @@ end
     probrec::Union{Nothing, Float64} = nothing
     groupinitial::Union{Nothing, Int8} = nothing
     κ::Float64 = 1.0
-    mult_b::Vector{Float64} = ones(Float64, 7)
+    mult_b::Vector{Float64} = ones(Float64, 4)
     ξ::Float64 = 1.0
 end
 
 
 Base.show(io::IO, ::MIME"text/plain", z::Human) = dump(z)
 
-include("matrices.jl")
 ## constants 
 const popsize = 50000
 const humans = Array{Human}(undef, popsize) 
@@ -429,7 +428,7 @@ export initialize
 function getting_b_values(p::ModelParameters)
 
     if p.b_value == :fixed
-        return [1-p.b; p.b; 1-p.b; p.b; p.b]# bs, bh, bl, ba, be
+        return [1-p.b, p.b, 1-p.b, p.b]# bs, bh, bl, ba, be
     elseif p.b_value == :prob
 
         b1 = 0.01#round(rand(Distributions.Uniform(0.08, 0.12)), digits = 5)#p.b
@@ -439,7 +438,7 @@ function getting_b_values(p::ModelParameters)
        # b5 = isnothing(p.probrec) ? round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) : Float32(p.probrec)  #round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
        # b6 = round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) #bpl
        # b7 = round(rand(Distributions.Uniform(0.06, 0.09)), digits = 5) #bpl
-        return Float32.([b1; b2; b3; b4].*p.mult_b)
+        return Float32.([b1, b2, b3, b4].*p.mult_b)
     else
         error("no strategy set for b values")
     end
@@ -704,7 +703,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
 
             if r < prob_ant
                 x.vac_behavior = ANT
-            elseif r < prob_pro+prob_lik
+            elseif r < prob_ant+prob_lik
                 x.vac_behavior = LIK
             else
                 x.vac_behavior = HES
