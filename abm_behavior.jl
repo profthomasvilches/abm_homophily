@@ -521,11 +521,11 @@ function get_alphas()
     αsl = p.κ*rand(Distributions.Beta(3,3))
     αsh = p.κ*rand(Distributions.Beta(2,4))
     αsa = p.κ*rand(Distributions.Beta(2,5))
-    βv = p.κ*rand(Distributions.Beta(3,2))
-    βsv = p.κ*rand(Distributions.Beta(3,2))
-    βsl = p.κ*rand(Distributions.Beta(2,3))
-    βsh = p.κ*rand(Distributions.Beta(3,4))
-    βsa = p.κ*rand(Distributions.Beta(4,3))
+    βv = p.ξ*p.κ*rand(Distributions.Beta(3,2))
+    βsv = p.ξ*p.κ*rand(Distributions.Beta(3,2))
+    βsl = p.ξ*p.κ*rand(Distributions.Beta(2,3))
+    βsh = p.ξ*p.κ*rand(Distributions.Beta(3,4))
+    βsa = p.ξ*p.κ*rand(Distributions.Beta(4,3))
 
     return αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa
 end
@@ -603,9 +603,9 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
     if x.vac_behavior == LIK
         
         
-        r_pro = x.betas_vac[1]*(αv*x.contacts_vac[7]/s_vac+βv*V/popsize) # bs, bh, bl, ba, be
-        r_hes = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # bs, bh, bl, ba, be
-        r_ant = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # bs, bh, bl, ba, be
+        r_pro = x.betas_vac[1]*(βv*x.contacts_vac[7]/s_vac+αv*V/popsize) # bs, bh, bl, ba, be
+        r_hes = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # bs, bh, bl, ba, be
+        r_ant = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # bs, bh, bl, ba, be
 
         sr = (r_pro+r_hes+r_ant) #sum r
 
@@ -629,12 +629,12 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
 
     elseif x.vac_behavior == HES
           
-        r_pro = x.betas_vac[1]*(αv*x.contacts_vac[7]/s_vac+βv*V/popsize) # bs, bh, bl, ba, be
+        r_pro = x.betas_vac[1]*(βv*x.contacts_vac[7]/s_vac+αv*V/popsize) # bs, bh, bl, ba, be
         r_lik = x.betas_vac[1]*( # same b for both
-            αsv*x.contacts_vac[1]/s_vac+βsv*Sv/popsize + # pro
-            αv*x.contacts_vac[7]/s_vac+βv*V/popsize # pro and vac
+            βsv*x.contacts_vac[1]/s_vac+αsv*Sv/popsize + # pro
+            βv*x.contacts_vac[7]/s_vac+αv*V/popsize # pro and vac
         ) # bs, bh, bl, ba, be
-        r_ant = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # bs, bh, bl, ba, be
+        r_ant = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # bs, bh, bl, ba, be
 
         sr = (r_pro+r_lik+r_ant) #sum r
 
@@ -655,15 +655,15 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
             end
         end
     elseif x.vac_behavior == ANT
-        r_pro = x.betas_vac[1]*(αv*x.contacts_vac[7]/s_vac+βv*V/popsize) # bs, bh, bl, ba, be
+        r_pro = x.betas_vac[1]*(βv*x.contacts_vac[7]/s_vac+αv*V/popsize) # bs, bh, bl, ba, be
         r_lik = x.betas_vac[1]*( # same b for both
-            αsv*x.contacts_vac[1]/s_vac+βsv*Sv/popsize + # pro
-            αv*x.contacts_vac[7]/s_vac+βv*V/popsize # pro and vac
+            βsv*x.contacts_vac[1]/s_vac+αsv*Sv/popsize + # pro
+            βv*x.contacts_vac[7]/s_vac+αv*V/popsize # pro and vac
         ) # bs, bh, bl, ba, be
         r_hes = x.betas_vac[1]*( # same b for both
-            αsv*x.contacts_vac[1]/s_vac+βsv*Sv/popsize + # pro
-            αv*x.contacts_vac[7]/s_vac+βv*V/popsize # pro and vac
-        )+x.betas_vac[2]*(αsl*x.contacts_vac[2]/s_vac+βsl*L/popsize) # depends on likely
+            βsv*x.contacts_vac[1]/s_vac+αsv*Sv/popsize + # pro
+            βv*x.contacts_vac[7]/s_vac+αv*V/popsize # pro and vac
+        )+x.betas_vac[2]*(βsl*x.contacts_vac[2]/s_vac+αsl*L/popsize) # depends on likely
          # bs, bh, bl, ba, be
 
         sr = (r_pro+r_lik+r_hes) #sum r
@@ -685,10 +685,10 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
             end
         end
     elseif x.vac_behavior == PRO && x.vac_status == 0
-        r_ant = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # depends on anti
-        r_lik = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize)+
-        x.betas_vac[3]*(αsh*x.contacts_vac[3]/s_vac+βsh*H/popsize) # depends on A and H
-        r_hes = x.betas_vac[4]*(αsa*x.contacts_vac[4]/s_vac+βsa*A/popsize) # depends on anti
+        r_ant = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
+        r_lik = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize)+
+        x.betas_vac[3]*(βsh*x.contacts_vac[3]/s_vac+βsh*H/popsize) # depends on A and H
+        r_hes = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
          # bs, bh, bl, ba, be
 
         sr = (r_ant+r_lik+r_hes) #sum r
