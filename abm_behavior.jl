@@ -619,6 +619,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
 
             if r < prob_pro
                 x.vac_behavior = PRO
+                behaviors[x.idx] = true
             elseif r < prob_pro+prob_hes
                 x.vac_behavior = HES
             else
@@ -648,6 +649,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
 
             if r < prob_pro
                 x.vac_behavior = PRO
+                behaviors[x.idx] = true
             elseif r < prob_pro+prob_lik
                 x.vac_behavior = LIK
             else
@@ -678,6 +680,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
 
             if r < prob_pro
                 x.vac_behavior = PRO
+                behaviors[x.idx] = true
             elseif r < prob_pro+prob_lik
                 x.vac_behavior = LIK
             else
@@ -687,7 +690,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
     elseif x.vac_behavior == PRO && x.vac_status == 0
         r_ant = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
         r_lik = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize)+
-        x.betas_vac[3]*(βsh*x.contacts_vac[3]/s_vac+βsh*H/popsize) # depends on A and H
+        x.betas_vac[3]*(βsh*x.contacts_vac[3]/s_vac+αsh*H/popsize) # depends on A and H
         r_hes = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
          # bs, bh, bl, ba, be
 
@@ -703,10 +706,13 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
 
             if r < prob_ant
                 x.vac_behavior = ANT
+                behaviors[x.idx] = false
             elseif r < prob_ant+prob_lik
                 x.vac_behavior = LIK
+                behaviors[x.idx] = false
             else
                 x.vac_behavior = HES
+                behaviors[x.idx] = false
             end
         end
 
