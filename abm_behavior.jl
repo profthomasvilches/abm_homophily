@@ -432,9 +432,9 @@ function getting_b_values(p::ModelParameters)
     elseif p.b_value == :prob
 
         b1 = 0.01#round(rand(Distributions.Uniform(0.08, 0.12)), digits = 5)#p.b
-        b2 = 0.04#round(rand(Distributions.Uniform(0.05, 0.08)), digits = 5)#round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
-        b3 = 0.05#round(rand(Distributions.Uniform(0.02, 0.05)), digits = 5)#round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
-        b4 = 0.005#round(rand(Distributions.Uniform(0.03, 0.06)), digits = 5)#round(rand(Distributions.Beta(1, 20)), digits = 5) #bl
+        b2 = 0.01#round(rand(Distributions.Uniform(0.05, 0.08)), digits = 5)#round(rand(Distributions.Beta(2, 25)), digits = 5) #bh
+        b3 = 0.01#round(rand(Distributions.Uniform(0.02, 0.05)), digits = 5)#round(rand(Distributions.Beta(1.5, 20)), digits = 5) #ba
+        b4 = 0.01#round(rand(Distributions.Uniform(0.03, 0.06)), digits = 5)#round(rand(Distributions.Beta(1, 20)), digits = 5) #bl
        # b5 = isnothing(p.probrec) ? round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) : Float32(p.probrec)  #round(rand(Distributions.Beta(2, 20)), digits = 5) : Float32(p.probrec) #be
        # b6 = round(rand(Distributions.Uniform(0.01, 0.03)), digits = 5) #bpl
        # b7 = round(rand(Distributions.Uniform(0.06, 0.09)), digits = 5) #bpl

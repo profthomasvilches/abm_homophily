@@ -23,13 +23,13 @@
 
 
 
-# xi = 15.0
-xi = 20.0
+xi = 1.0
 # L-P; L-H; AH ;HA ;LHR; PL; HL
 kapa = 1.0
-# aa = [0.2,0.2,3.0,3.0]#
-# aa = [0.2,0.2,3.0,3.0]#
-aa = [0.2,0.2,5.0,5.0]#
+
+
+ww = 1.0
+aa = [1.0,ww*1.0,ww*1.0,1.0]#
 h = 0.0
 run_param(6, 0.1, h, kapa, :prob, 200, 0.7, 0.7, nothing, nothing, 2000, aa, xi) #divided by 10 and 2
 
