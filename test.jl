@@ -28,7 +28,7 @@ xi = 1.0
 kapa = 1.0
 
 
-ww = 1.0
+ww = 0.05
 aa = [1.0,ww*1.0,ww*1.0,1.0]#
 h = 0.0
 run_param(6, 0.1, h, kapa, :prob, 200, 0.7, 0.7, nothing, nothing, 2000, aa, xi) #divided by 10 and 2
