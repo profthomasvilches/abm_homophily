@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CODE 01
 
 This code tests if x infects y and y infects x
@@ -8,3 +9,8 @@ nprocs = 10
 nsims = 20
 
 time 80s
+=======
+# CODE master
+
+This code tests if x infects y and y infects x
+>>>>>>> c590a24175d84792aa8f706544fbb39ef9126323

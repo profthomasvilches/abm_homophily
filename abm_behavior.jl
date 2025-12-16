@@ -395,7 +395,7 @@ function initialize()
     agedist = get_province_ag(p.prov)
     #agebraksnew = [0:4,5:14,15:24,25:34,35:44,45:54,55:64,65:74,75:84,85:99]
     
-    age_break_behav = [0:17, 18:24,25:49,50:64,65:99]
+    age_break_behav = [0:17,18:24,25:49,50:64,65:99]
     prob_behav = [[0.271;0.241;0.303;0.084],[0.38;0.214;0.205;0.088],[0.271;0.241;0.303;0.084],[0.322;0.302;0.223;0.053],[0.471;0.288;0.131;0.04]]
     a = [4;19;49;64;79;999]
      
@@ -1021,6 +1021,85 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
 
 
         
+            ycnt = y.nextday_meetcnt  
+            y.nextday_meetcnt = y.nextday_meetcnt - min(1,ycnt) # remove a contact
+
+            ycnt == 0 && continue
+            
+            if x.vac_status*y.vac_status == 0 # only gets to it if it is necessary
+                if x.vac_status == 0 && x.vac_behavior != UNDEFV
+                    y.contacts_vac[Int(x.vac_behavior)+1] += 1
+                end
+    
+                if y.vac_status == 0 && y.vac_behavior != UNDEFV
+                    x.contacts_vac[Int(y.vac_behavior)+1] += 1
+                end
+    
+                if x.vac_status == 1
+                    if x.wentto == 1
+                        if  x.health_status == REC
+                            y.contacts_vac[5] += 1
+                        elseif x.health_status == DED
+                            y.contacts_vac[6] += 1
+                        end
+                    end
+                    if x.vac_behavior == PRO
+                        y.contacts_vac[7] += 1
+                    end
+                    y.contacts_vac[8] += 1
+    
+                elseif y.vac_status == 1
+                    if y.wentto == 1
+                        if  y.health_status == REC
+                            x.contacts_vac[5] += 1
+                        elseif y.health_status == DED
+                            x.contacts_vac[6] += 1
+                        end
+                    end
+                    if y.vac_behavior == PRO
+                        x.contacts_vac[7] += 1
+                    end
+                    x.contacts_vac[8] += 1
+                end
+            end
+            
+
+
+            aux = 0
+
+            if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
+                aux = 1
+                beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
+            elseif xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
+                aux = 2
+                beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
+            else
+                beta = 0.0
+            end
+
+            if rand() < beta
+                if aux == 1
+                    y.exp = y.tis   ## force the move to latent in the next time step.
+                    y.sickfrom = xhealth ## stores the infector's status to the infectee's sickfrom
+                    y.sickby = y.sickby < 0 ? x.idx : y.sickby
+                           
+                    y.swap = LAT
+                    y.swap_status = LAT
+                    y.daysinf = 0
+                    y.dur = sample_epi_durations(y)
+                elseif aux == 2
+                    x.exp = x.tis   ## force the move to latent in the next time step.
+                    x.sickfrom = y.health ## stores the infector's status to the infectee's sickfrom
+                    x.sickby = x.sickby < 0 ? y.idx : x.sickby
+                    x.swap = LAT
+                    x.swap_status = LAT
+                    x.daysinf = 0
+                    x.dur = sample_epi_durations(x)
+                
+                end
+
+            end  
+        end
     end  
     
 end
