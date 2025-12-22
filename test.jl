@@ -21,15 +21,20 @@
 # adding vaccine on top
 
 
+#aa = [1.0,ww*1.0,ww*1.0,1.0]#
+#aa = [0.5,ww*1.0,ww*1.0,0.5]# xi = 1
+#aa = [0.5,ww*1.0,ww*1.0,0.5]# xi = 15
+#aa = [0.5,ww*1.0,ww*1.0,0.5]# xi = 10
+#aa = [0.5,ww*1.0,ww*1.0,0.5]# xi = 5 - okay
+#aa = [0.5,ww*1.0,ww*1.0,0.5]# xi = 3 - little worse
 
-
-xi = 1.0
+xi = 5.0
 # L-P; L-H; AH ;HA ;LHR; PL; HL
 kapa = 1.0
 
 
 ww = 0.05
-aa = [1.0,ww*1.0,ww*1.0,1.0]#
+aa = [0.5,ww*1.0,ww*1.0,0.5]#
 h = 0.0
 run_param(6, 0.1, h, kapa, :prob, 200, 0.7, 0.7, nothing, nothing, 2000, aa, xi) #divided by 10 and 2
 
@@ -50,13 +55,13 @@ run_param(6, 0.1, h, kapa, :prob, 200, 0.7, 0.7, nothing, nothing, 2000, aa, xi)
 
 
 
-# xi = 15.0
-xi = 20.0
+xi = 5.0
 # L-P; L-H; AH ;HA ;LHR; PL; HL
 kapa = 1.0
-# aa = [0.2,0.2,3.0,3.0]#
-# aa = [0.2,0.2,3.0,3.0]#
-aa = [0.2,0.2,5.0,5.0]#
+
+
+ww = 0.05
+aa = [0.5,ww*1.0,ww*1.0,0.5]#
 h = 0.0
 run_param(1, 0.1, h, kapa, :prob, 0, 0.7, 0.7, nothing, nothing, 2000, aa, xi) #divided by 10 and 2
 run_param(6, 0.1, h, kapa, :prob, 200, 0.7, 0.7, nothing, nothing, 2000, aa, xi) #divided by 10 and 2
