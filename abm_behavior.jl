@@ -45,6 +45,7 @@ Base.@kwdef mutable struct Human
     betas_vac::Vector{Float32} = Float32.([0.0, 0.0, 0.0, 0.0]) # bs, bh, bl, ba, be
    
     totaldaysiso::Int16 = 0  
+    Nchanges::Int8 = 0
 end
 
 ## default system parameters
@@ -577,9 +578,12 @@ function time_update(nvac::Int64)
             end
         end
 
+        if x.Nchanges < 2
         # behavioral change
-        update_behavior(x, [αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa], contagem_vetor)
+            update_behavior(x, [αv, αsv, αsl, αsh, αsa, βv, βsv, βsl, βsh, βsa], contagem_vetor)
         
+        end
+
         x.contacts_vac = UInt8.([0;0;0;0;0;0;0;0;0])
     
         #get_nextday_counts(x)
@@ -614,6 +618,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
             prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
             prob_ant = r_ant/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
             #prob_comp = exp(-(r_pro+r_hes+r_ant))
+            x.Nchanges += 1
 
             r = rand()
 
@@ -644,10 +649,12 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
             prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
             prob_ant = r_ant/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
             #prob_comp = exp(-(r_pro+r_hes+r_ant))
+            x.Nchanges += 1
 
             r = rand()
 
             if r < prob_pro
+
                 x.vac_behavior = PRO
                 behaviors[x.idx] = true
             elseif r < prob_pro+prob_lik
@@ -656,7 +663,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
                 x.vac_behavior = ANT
             end
         end
-    elseif x.vac_behavior == ANT
+    #= elseif x.vac_behavior == ANT
         r_pro = x.betas_vac[1]*(βv*x.contacts_vac[7]/s_vac+αv*V/popsize) # bs, bh, bl, ba, be
         r_lik = x.betas_vac[1]*( # same b for both
             βsv*x.contacts_vac[1]/s_vac+αsv*Sv/popsize + # pro
@@ -675,6 +682,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
             prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
             prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
             #prob_comp = exp(-(r_pro+r_hes+r_ant))
+            x.Nchanges += 1
 
             r = rand()
 
@@ -693,6 +701,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
         x.betas_vac[3]*(βsh*x.contacts_vac[3]/s_vac+αsh*H/popsize) # depends on A and H
         r_hes = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
          # bs, bh, bl, ba, be
+        x.Nchanges += 1
 
         sr = (r_ant+r_lik+r_hes) #sum r
 
@@ -714,7 +723,7 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
                 x.vac_behavior = HES
                 behaviors[x.idx] = false
             end
-        end
+        end =#
 
     end
 
