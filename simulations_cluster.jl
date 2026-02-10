@@ -115,18 +115,14 @@ end
 
 
 
-function create_folder_new(ip::cv.ModelParameters)
+function create_folder_new(ip::cv.ModelParameters, change_l::Bool)
     #strategy = ip.apply_vac_com == true ? "S1" : "S2"
-    if isnothing(ip.probrec) && isnothing(ip.groupinitial)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value) ## 
+    if !change_l
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.function_homophily) ## 
         #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
-    elseif isnothing(ip.groupinitial)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value,"_", ip.probrec)
-        #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
-    elseif isnothing(ip.probrec)
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value, "_", ip.groupinitial) ## 
+            #RF = string("./outputs/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value,"_", ip.probrec)
     else
-        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.b_value, "_", ip.groupinitial,"_", ip.probrec)
+        RF = string("/data/thomas/homophily/results_", ip.file_index, "_", ip.β, "_", ip.h, "_", ip.κ, "_", ip.function_homophily, "_", ip.L) ## 
     end
     #RF = string("./outputs/results_", ip.β, "_", ip.h, "_", ip.b, "_", ip.b_value) ## 
     if !Base.Filesystem.isdir(RF)
@@ -135,12 +131,12 @@ function create_folder_new(ip::cv.ModelParameters)
     return RF
 end
 
-function run_param(fidx::Int64, beta::Float64, hh::Float64, kapa::Float64 = 2.0, scen::Symbol = :prob, vac_rate::Int64 = 0, ve::Float64 = 0.0, ves::Float64 = 0.0, prob_rec::Union{Nothing, Float64} = nothing, group_init::Union{Nothing, Int8} = nothing, nsims::Int64 = 1000, multib::Vector{Float64} = ones(Float64, 4), xi::Float64 = 1.0, im_p::Int8 = Int8(0))
+function run_param(fidx::Int64, beta::Float64, hh::Float64, kapa::Float64 = 2.0, vac_rate::Int64 = 0, group_init::Union{Nothing, Int8} = nothing, nsims::Int64 = 1000, multib::Vector{Float64} = ones(Float64, 4), xi::Float64 = 1.0, law::Symbol = :power, ll::Vector{Float64} = [0.7, 2.0, 0.2], change_l::Bool = false, im_p::Int8 = Int8(0))
      GC.gc()
-    @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), κ = $kapa, b_value=$(QuoteNode(scen)), file_index = $fidx,
-    vaccination_rate = $vac_rate, vaccine_eff = $ve, vaccine_eff_symp = $ves, probrec = $prob_rec, ξ = $xi,
-    groupinitial = $group_init, mult_b = $multib, vac_immunity_period = $im_p)
-    folder = create_folder_new(ip)
+    @everywhere ip = cv.ModelParameters(β=$beta,h = $(hh), κ = $kapa, file_index = $fidx,
+    vaccination_rate = $vac_rate, ξ = $xi,
+    groupinitial = $group_init, mult_b = $multib, vac_immunity_period = $im_p, function_homophily=$(QuoteNode(law)), L = $ll[1], alphan = $ll[2], k = $ll[3])
+    folder = create_folder_new(ip, change_l)
 
     run(ip,nsims,folder)
     

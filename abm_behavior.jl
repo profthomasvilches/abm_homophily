@@ -61,8 +61,8 @@ end
    
     fsevere::Float64 = 1.0 #
     frelasymp::Float64 = 0.26 ## relative transmission of asymptomatic
-    vaccine_eff::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
-    vaccine_eff_symp::Float16 = 0.0   ## change this to Float32 typemax(Float32) typemax(Float64)
+    vaccine_eff::Float16 = 0.7   ## change this to Float32 typemax(Float32) typemax(Float64)
+    vaccine_eff_symp::Float16 = 0.7   ## change this to Float32 typemax(Float32) typemax(Float64)
     vaccination_rate::Int64 = 10
     vac_immunity_period::Int8 = 0
     
@@ -72,11 +72,18 @@ end
     b = 0.5
     # hosp_red::Float64 = 3.1 # Taiye: We can add this if we decide to include hospitalizations.
     isolation_days::Int64 = 5
-    probrec::Union{Nothing, Float64} = nothing
+    #probrec::Union{Nothing, Float64} = nothing
     groupinitial::Union{Nothing, Int8} = nothing
     κ::Float64 = 1.0
     mult_b::Vector{Float64} = ones(Float64, 4)
     ξ::Float64 = 1.0
+
+    k = 0.2
+    alphan = 2.0
+    L = 0.7
+    F = 0.7
+
+    function_homophily::Symbol = :power #power, assortative, created
 end
 
 
@@ -143,11 +150,12 @@ export runsim
 
 function main(ip::ModelParameters,sim::Int64)
     Random.seed!(sim*726)
+
     ## datacollection            
     # matrix to collect model state for every time step
-
     # reset the parameters for the simulation scenario
     reset_params(ip)  #logic: outside "ip" parameters are copied to internal "p" which is a global const and available everywhere. 
+    setfield!(p, :F, homophily_f())
 
     popsize == 0 && error("no population size given")
     
@@ -223,6 +231,21 @@ function main(ip::ModelParameters,sim::Int64)
     return hmatrix, vmatrix, h_init1, vac_number, initial_state## return the model state as well as the age groups. 
 end
 export main
+
+function homophily_f()
+    hh = p.h
+    if p.function_homophily == :power
+        r =  p.L + (1 - p.L)*hh^p.alphan
+    elseif p.function_homophily == :assortative
+        r = p.L + (1 - p.L)*hh/(hh+p.k*(1-hh))
+    elseif p.function_homophily == :created
+        r = (hh + 2*p.L*(1 - hh))/(2-hh)
+    else
+        error("No defined homophily function")
+    end
+
+    return r
+end
 
 function vaccination(sim::Int64)
     if p.vaccination_rate == 0
@@ -911,23 +934,23 @@ export _get_betavalue
     return cnt
 end
 
-function calculate_H(gp)
+# function calculate_H(gp)
     
-    # how many times it appears
-    contagens = countmap([humans[i].vac_behavior for i in gp])
+#     # how many times it appears
+#     contagens = countmap([humans[i].vac_behavior for i in gp])
 
-    contagem_vetor = [get(contagens, i, 0) for i in v_basis]
-    # probabilities based on homophily
+#     contagem_vetor = [get(contagens, i, 0) for i in v_basis]
+#     # probabilities based on homophily
     
-    Pj = zeros(Float64, length(v_basis), length(v_basis))
-    if sum(contagem_vetor) > 0
-        for br in v_basis
-            H = p.h .* Int.(br .== v_basis)+(1-p.h) .* contagem_vetor./sum(contagem_vetor)
-            Pj[Int(br)+1,:] = H ./ sum(H)
-        end
-    end
-    return Pj
-end
+#     Pj = zeros(Float64, length(v_basis), length(v_basis))
+#     if sum(contagem_vetor) > 0
+#         for br in v_basis
+#             H = p.h .* Int.(br .== v_basis)+(1-p.h) .* contagem_vetor./sum(contagem_vetor)
+#             Pj[Int(br)+1,:] = H ./ sum(H)
+#         end
+#     end
+#     return Pj
+# end
 
 function get_age_behav(grpi)
     vector = Iterators.take([humans[i].vac_behavior for i in grpi], length(grpi))
@@ -987,7 +1010,7 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
          
         y = humans[j]
         # getting back to this one
-        if rand() < p.h
+        if rand() < (1 - p.F)#p.h # F is the probability of having a contact within group
             y = humans[rand(grp_sample[y.ag])]
         end
     
