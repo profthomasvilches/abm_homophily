@@ -67,8 +67,8 @@ function run(myp::cv.ModelParameters, nsims=1000, folderprefix="./")
     
     ## save at the simulation and time level
     ## to ignore for now: miso, iiso, mild 
-    c1 = Symbol.((:LAT, :ASYMP, :INF, :DED), :_INC)
-    #c2 = Symbol.((:LAT, :ASYMP, :INF, :IISO, :HOS, :ICU, :DED), :_PREV)
+    c1 = Symbol.((:LAT, :INF, :DED), :_INC)
+    #c2 = Symbol.((:LAT, :INF, :IISO, :HOS, :ICU, :DED), :_PREV)
     #c1 = Symbol.((:LAT, :HOS, :ICU, :DED), :_INC)
     c2 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEFV), :_INC)
     c3 = Symbol.((:PRO, :LIK, :HES, :ANT, :UNDEFV), :_PREV)

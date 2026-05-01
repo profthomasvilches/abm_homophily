@@ -1,8 +1,8 @@
 
-### Power
 
-for l in 0.0:0.2:0.8
-
+#for l in 0.4:0.4:0.8
+l = 0.6
+    ### Power
     xi = 5.0
     # L-P; L-H; AH ;HA ;LHR; PL; HL
     kapa = 1.0
@@ -56,4 +56,4 @@ for l in 0.0:0.2:0.8
         run_param(6, 0.1, h, kapa, 200,  nothing, 2000, aa, xi, :created, LV, true) #divided by 10 and 2
     end
 
-end
+#end

@@ -2,7 +2,7 @@ module abmbehavior
 
 using Base
 using Parameters, Distributions, StatsBase, StaticArrays, Random, Match, DataFrames
-@enum HEALTH SUS LAT PRE ASYMP INF REC DED UNDEF # 
+@enum HEALTH SUS LAT PRE INF REC DED UNDEF # 
 @enum VACS PRO LIK HES ANT UNDEFV
 
 
@@ -97,6 +97,7 @@ const agebraks = @SVector [0:4, 5:19, 20:49, 50:64, 65:99]
 const v_basis = @SVector [PRO, LIK, HES, ANT]
 const pos_s = collect(1:popsize)
 const behaviors = falses(popsize)
+const gotinf = falses(popsize)
 
 export popsize, ModelParameters, HEALTH, VACS, Human, humans, BETAS, v_basis, pos_s
 
@@ -181,8 +182,8 @@ function main(ip::ModelParameters,sim::Int64)
     #insert one infected in the latent status in age group 4
     insert_infected(LAT, p.initialinf, 4)
 
-    # h_init1 = findall(x->x.health_status  in (LAT,MILD,INF,PRE,ASYMP), humans) # Taiye: MILD is unnecessary.
-    h_init1 = findall(x->x.health_status  in (LAT,INF,PRE,ASYMP), humans)
+    
+    h_init1 = findall(x->x.health_status  in (LAT,INF,PRE), humans)
     
     ## save the preisolation isolation parameters
     #we need the workplaces to get the next days counts
@@ -253,7 +254,7 @@ function vaccination(sim::Int64)
     end
     rng = MersenneTwister(1234*sim)
     # pos = findall(x -> x.vac_status == 0 && x.vac_behavior ∈ (UNDEFV, PRO), humans)
-    pos = Iterators.take(shuffle(rng, findall(x -> x, behaviors)), p.vaccination_rate)
+    pos = Iterators.take(shuffle(rng, findall(x -> behaviors[x] && !gotinf[x], 1:popsize)), p.vaccination_rate)
 
     for i in pos
         humans[i].vac_status = 1
@@ -494,7 +495,7 @@ function insert_infected(health, num, ag)
                 x.swap_status = PRE
                 x.daysinf = x.dur[1]+1
                 x.wentto = 1
-                move_to_pre(x) ## the swap may be asymp, mild, or severe, but we can force severe in the time_update function
+                move_to_pre(x) ## the swap may be mild, or severe, but we can force severe in the time_update function
             elseif health == LAT
                 x.swap = health
                 x.swap_status = LAT
@@ -513,11 +514,6 @@ function insert_infected(health, num, ag)
                 x.swap_status = INF
                 x.wentto = 1
                 move_to_inf(x)
-            elseif health == ASYMP
-                x.swap = health
-                x.swap_status = ASYMP
-                x.wentto = 2
-                move_to_asymp(x)
             
             
             elseif health == REC 
@@ -587,8 +583,6 @@ function time_update(nvac::Int64)
                 move_to_latent(x) 
             elseif x.swap_status == PRE
                 move_to_pre(x)
-            elseif x.swap_status == ASYMP
-                move_to_asymp(x)
             elseif x.swap_status == INF
                 move_to_inf(x)
             elseif x.swap_status == REC
@@ -686,67 +680,6 @@ function update_behavior(x::Human, alphas::Vector{Float64}, ninds::Vector{Int64}
                 x.vac_behavior = ANT
             end
         end
-    #= elseif x.vac_behavior == ANT
-        r_pro = x.betas_vac[1]*(βv*x.contacts_vac[7]/s_vac+αv*V/popsize) # bs, bh, bl, ba, be
-        r_lik = x.betas_vac[1]*( # same b for both
-            βsv*x.contacts_vac[1]/s_vac+αsv*Sv/popsize + # pro
-            βv*x.contacts_vac[7]/s_vac+αv*V/popsize # pro and vac
-        ) # bs, bh, bl, ba, be
-        r_hes = x.betas_vac[1]*( # same b for both
-            βsv*x.contacts_vac[1]/s_vac+αsv*Sv/popsize + # pro
-            βv*x.contacts_vac[7]/s_vac+αv*V/popsize # pro and vac
-        )+x.betas_vac[2]*(βsl*x.contacts_vac[2]/s_vac+αsl*L/popsize) # depends on likely
-         # bs, bh, bl, ba, be
-
-        sr = (r_pro+r_lik+r_hes) #sum r
-
-        if rand() < (1-exp(-sr))
-            prob_pro = r_pro/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
-            prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
-            prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
-            #prob_comp = exp(-(r_pro+r_hes+r_ant))
-            x.Nchanges += 1
-
-            r = rand()
-
-            if r < prob_pro
-                x.vac_behavior = PRO
-                behaviors[x.idx] = true
-            elseif r < prob_pro+prob_lik
-                x.vac_behavior = LIK
-            else
-                x.vac_behavior = HES
-            end
-        end
-    elseif x.vac_behavior == PRO && x.vac_status == 0
-        r_ant = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
-        r_lik = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize)+
-        x.betas_vac[3]*(βsh*x.contacts_vac[3]/s_vac+αsh*H/popsize) # depends on A and H
-        r_hes = x.betas_vac[4]*(βsa*x.contacts_vac[4]/s_vac+αsa*A/popsize) # depends on anti
-         # bs, bh, bl, ba, be
-        x.Nchanges += 1
-
-        sr = (r_ant+r_lik+r_hes) #sum r
-
-        if rand() < (1-exp(-sr))
-            prob_ant = r_ant/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
-            prob_lik = r_lik/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
-            prob_hes = r_hes/sr#*(1-exp(-(r_pro+r_hes+r_ant)))
-            #prob_comp = exp(-(r_pro+r_hes+r_ant))
-
-            r = rand()
-
-            if r < prob_ant
-                x.vac_behavior = ANT
-                behaviors[x.idx] = false
-            elseif r < prob_ant+prob_lik
-                x.vac_behavior = LIK
-                behaviors[x.idx] = false
-            else
-                x.vac_behavior = HES
-                behaviors[x.idx] = false
-            end
-        end =#
 
     end
 
@@ -778,44 +711,12 @@ function move_to_latent(x::Human)
     x.tis = 0   # reset time in state 
     x.exp = x.dur[1] # get the latent period
    
-    #0-18 31 19 - 59 29 60+ 18 going to asymp
-    symp_pcts = [0.7, 0.623, 0.672, 0.672, 0.812, 0.812] #[0.3 0.377 0.328 0.328 0.188 0.188]
-    age_thres = [4, 19, 49, 64, 79, 999]
-    g = findfirst(y-> y >= x.age, age_thres)
-
- 
-    if rand() < (symp_pcts[g])*(1-p.vaccine_eff_symp)^x.immune
-       
         x.swap = PRE
         x.swap_status = PRE
         x.wentto = 1
-        
-    else
-        x.swap = ASYMP
-        x.swap_status = ASYMP
-        x.wentto = 2
-        
-    end
-    
-    ## in calibration mode, latent people never become infectious.
     
 end
 export move_to_latent
-
-function move_to_asymp(x::Human)
-    ## transfers human h to the asymptomatic stage 
-    x.health = x.swap  
-    x.health_status = x.swap_status
-    x.tis = 0 
-    x.exp = x.dur[2] # get the presymptomatic period
-   
-    x.swap = REC
-    x.swap_status = REC
-    
-    # x.iso property remains from either the latent or presymptomatic class
-    # if x.iso is true, the asymptomatic individual has limited contacts
-end
-export move_to_asymp
 
 function move_to_pre(x::Human)
     #θ = (0.95, 0.9, 0.85, 0.6, 0.2)
@@ -864,7 +765,8 @@ function move_to_inf(x::Human)
             x.swap = REC
             x.swap_status = REC
     end
-         
+    
+    gotinf[x.idx] = true
    # end
     ## before returning, check if swap is set 
     #x.swap == UNDEF && error("agent I -> ?")
@@ -902,9 +804,7 @@ end
     #length(BETAS) == 0 && return 0
     bf = p.β#BETAS[sys_time]
     # values coming from FRASER Figure 2... relative tranmissibilities of different stages.
-    if xhealth == ASYMP
-        bf = bf * p.frelasymp #0.11
-    elseif xhealth == INF 
+    if xhealth == INF 
         bf = 0.89*bf
     end
 
@@ -1035,7 +935,7 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
 
         end
         
-        if xhealth == SUS && y.health in (ASYMP, INF) && x.swap == UNDEF
+        if xhealth == SUS && y.health == INF && x.swap == UNDEF
             
             beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.immune
             
@@ -1099,10 +999,10 @@ function perform_contacts(x::Human,grp_sample::Vector{Vector{Int64}},xhealth::HE
 
         aux = 0
 
-        if y.health == SUS && xhealth ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
+        if y.health == SUS && xhealth ∈ (PRE, INF) && y.swap == UNDEF
             aux = 1
             beta = _get_betavalue(xhealth)*(1-p.vaccine_eff)^y.vac_status
-        elseif xhealth == SUS && y.health ∈ (PRE, INF, ASYMP) && y.swap == UNDEF
+        elseif xhealth == SUS && y.health ∈ (PRE, INF) && y.swap == UNDEF
             aux = 2
             beta = _get_betavalue(y.health)*(1-p.vaccine_eff)^x.vac_status
         else
